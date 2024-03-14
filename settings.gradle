@@ -1,0 +1,4 @@
+rootProject.name = 'plugins'
+
+include 'sentrix-mobile-lazy-waving-plugin'
+

@@ -1,0 +1,92 @@
+plugins {
+    id 'java'
+    id "io.spring.dependency-management" version "1.1.0"
+    id "org.springframework.boot" version "3.0.4"
+}
+
+group 'com.swms'
+version '1.0-SNAPSHOT'
+
+allprojects {
+    apply plugin: 'java'
+    apply plugin: 'idea'
+    apply plugin: 'jacoco'
+    apply plugin: 'maven-publish'
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+    }
+
+    repositories {
+        mavenLocal()
+
+        // maven {
+        //     name 'nexus'
+        //     url project.repo_release
+        //     credentials {
+        //         username project.repoUser
+        //         password project.repoPassword
+        //     }
+        //     allowInsecureProtocol = true
+        // }
+
+        // maven {
+        //     name 'nexus'
+        //     url project.repo_snapshot
+        //     credentials {
+        //         username project.repoUser
+        //         password project.repoPassword
+        //     }
+        //     allowInsecureProtocol = true
+        // }
+
+        mavenCentral()
+    }
+}
+
+subprojects {
+    sourceCompatibility = 17
+    targetCompatibility = 17
+    apply plugin: 'io.spring.dependency-management'
+    apply plugin: 'org.springframework.boot'
+
+    test {
+        useJUnitPlatform()
+        ignoreFailures = true
+    }
+
+    // 这个里面的东西就是所有的子项目都要用的，当然，如果子项目不想用的话，也可以排除掉
+    dependencies {
+        testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+        testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+
+        compileOnly 'org.projectlombok:lombok:1.18.26'
+        annotationProcessor 'org.projectlombok:lombok:1.18.26'
+        testCompileOnly 'org.projectlombok:lombok:1.18.26'
+        testAnnotationProcessor 'org.projectlombok:lombok:1.18.26'
+    }
+
+    dependencyManagement {
+        dependencies {
+            dependency group: 'com.swms', name: 'plugin-extend', version: '1.0-SNAPSHOT'
+            dependency group: 'com.swms', name: 'wms-api', version: '1.0-SNAPSHOT'
+            dependency group: 'com.swms', name: 'common-utils', version: '1.0-SNAPSHOT'
+
+            /********************************* Plugin ************************************/
+            dependency group: 'org.pf4j', name: 'pf4j-spring', version: '0.8.0'
+
+            /********************************* Utils ************************************/
+            dependency group: 'org.apache.commons', name: 'commons-collections4', version: '4.4'
+        }
+
+    }
+
+}
+
+test {
+    useJUnitPlatform()
+}
+
+tasks.withType(JavaCompile) {
+    options.annotationProcessorPath = configurations.annotationProcessor
+}
