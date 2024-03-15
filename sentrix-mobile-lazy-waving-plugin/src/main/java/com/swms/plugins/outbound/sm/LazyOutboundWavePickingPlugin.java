@@ -38,7 +38,8 @@ public class LazyOutboundWavePickingPlugin implements IOutboundWavePickingPlugin
         // 复核打包台已上线，或者订单波次没有已完成订单，否则就过滤掉，等待打包台上线
         List<OutboundPlanOrderDTO> outboundPlanOrders = originalOutboundPlanOrders.stream()
             .filter(v -> outboundPlanOrderGroupMap.get(v.getCustomerWaveNo()).stream()
-                .noneMatch(dto -> OutboundPlanOrderStatusEnum.NEW != dto.getOutboundPlanOrderStatus())
+                .noneMatch(dto -> OutboundPlanOrderStatusEnum.NEW != dto.getOutboundPlanOrderStatus()
+                    && OutboundPlanOrderStatusEnum.ASSIGNED != dto.getOutboundPlanOrderStatus())
         ).toList();
 
         log.debug("After filter, new outbound plan orders size: {}", outboundPlanOrders.size());
