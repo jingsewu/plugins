@@ -11,6 +11,7 @@ repositories {
 
 dependencies {
     implementation 'com.swms:wms-api'
+    implementation 'com.swms:api-platform-api'
     implementation 'com.swms:plugin-extend'
     implementation 'com.swms:common-utils'
     implementation 'org.pf4j:pf4j-spring'

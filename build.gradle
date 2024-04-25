@@ -70,6 +70,7 @@ subprojects {
         dependencies {
             dependency group: 'com.swms', name: 'plugin-extend', version: '1.0-SNAPSHOT'
             dependency group: 'com.swms', name: 'wms-api', version: '1.0-SNAPSHOT'
+            dependency group: 'com.swms', name: 'api-platform-api', version: '1.0-SNAPSHOT'
             dependency group: 'com.swms', name: 'common-utils', version: '1.0-SNAPSHOT'
 
             /********************************* Plugin ************************************/

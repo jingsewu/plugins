@@ -1,5 +1,8 @@
 package com.swms.plugins.outbound.sm;
 
+import com.swms.api.platform.api.ICallbackApi;
+import com.swms.api.platform.api.constants.CallbackApiTypeEnum;
+import com.swms.common.utils.http.Response;
 import com.swms.plugin.extend.wms.outbound.IOutboundWavePickingPlugin;
 import com.swms.wms.api.outbound.IOutboundPlanOrderApi;
 import com.swms.wms.api.outbound.constants.OutboundPlanOrderStatusEnum;
@@ -22,7 +25,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class LazyOutboundWavePickingPlugin implements IOutboundWavePickingPlugin {
 
+    private static final String GET_PACKING_STATUS_API_CODE = "GET_PACKING_STATUS";
+
     private final IOutboundPlanOrderApi outboundPlanOrderApi;
+    private final ICallbackApi callbackApi;
 
     @Override
     public List<List<OutboundPlanOrderDTO>> doOperation(List<OutboundPlanOrderDTO> originalOutboundPlanOrders) {
@@ -55,6 +61,12 @@ public class LazyOutboundWavePickingPlugin implements IOutboundWavePickingPlugin
     }
 
     private boolean recheckStationIsOnline() {
+        Response result = callbackApi.callback(CallbackApiTypeEnum.COMMON_CALLBACK, GET_PACKING_STATUS_API_CODE, null);
+
+        if (!Response.SUCCESS_CODE.equals(result.getCode())) {
+            log.info("cannot get packing station status, api response is : {}", result);
+            return false;
+        }
         boolean isOnline = false;
         log.debug("Recheck station online status is : {}", isOnline);
         return isOnline;
