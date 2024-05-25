@@ -63,7 +63,7 @@ public class LazyOutboundWavePickingPlugin implements IOutboundWavePickingPlugin
     private boolean recheckStationIsOnline() {
         Response result = callbackApi.callback(CallbackApiTypeEnum.COMMON_CALLBACK, GET_PACKING_STATUS_API_CODE, null);
 
-        if (!Response.SUCCESS_CODE.equals(result.getCode())) {
+        if (result == null || !Response.SUCCESS_CODE.equals(result.getCode())) {
             log.info("cannot get packing station status, api response is : {}", result);
             return false;
         }
