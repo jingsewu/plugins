@@ -27,6 +27,9 @@ public class LazyOutboundWavePickingPlugin implements IOutboundWavePickingPlugin
 
     private static final String GET_PACKING_STATUS_API_CODE = "GET_PACKING_STATUS";
 
+    // 打包台状态：在线
+    private static final String PACKING_STATUS_1 = "1";
+
     private final IOutboundPlanOrderApi outboundPlanOrderApi;
     private final ICallbackApi callbackApi;
 
@@ -67,7 +70,8 @@ public class LazyOutboundWavePickingPlugin implements IOutboundWavePickingPlugin
             log.info("cannot get packing station status, api response is : {}", result);
             return false;
         }
-        boolean isOnline = false;
+
+        boolean isOnline = PACKING_STATUS_1.equals(result.getData());
         log.debug("Recheck station online status is : {}", isOnline);
         return isOnline;
     }
