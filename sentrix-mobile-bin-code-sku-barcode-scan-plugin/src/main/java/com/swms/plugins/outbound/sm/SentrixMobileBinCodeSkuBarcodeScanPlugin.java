@@ -3,6 +3,7 @@ package com.swms.plugins.outbound.sm;
 import com.swms.common.utils.exception.WmsException;
 import com.swms.common.utils.exception.code_enum.OperationTaskErrorDescEnum;
 import com.swms.common.utils.user.UserContext;
+import com.swms.mdm.api.config.constants.ExecuteTimeEnum;
 import com.swms.mdm.api.config.constants.UnionLocationEnum;
 import com.swms.mdm.api.config.dto.BarcodeParseRequestDTO;
 import com.swms.mdm.api.config.dto.BarcodeParseResult;
@@ -43,6 +44,11 @@ public class SentrixMobileBinCodeSkuBarcodeScanPlugin implements IBarcodeParsePl
         BarcodeParsePluginRequest request = operationContext.getOperationObject();
         BarcodeParseRequestDTO barcodeParseRequestDTO = request.getBarcodeParseRequestDTO();
         List<BarcodeParseRuleDTO> barcodeParseRules = request.getBarcodeParseRules();
+
+        // 如果扫描的不是 SKU，直接返回
+        if (!ExecuteTimeEnum.SCAN_SKU.equals(barcodeParseRequestDTO.getExecuteTime())) {
+            return defaultParse(barcodeParseRequestDTO, barcodeParseRules);
+        }
 
         String currentUser = UserContext.getCurrentUser();
         if (currentUser == null) {
