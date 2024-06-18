@@ -69,7 +69,10 @@ subprojects {
     dependencyManagement {
         dependencies {
             dependency group: 'com.swms', name: 'plugin-extend', version: '1.0-SNAPSHOT'
+            dependency group: 'com.swms', name: 'user-api', version: '1.0-SNAPSHOT'
             dependency group: 'com.swms', name: 'wms-api', version: '1.0-SNAPSHOT'
+            dependency group: 'com.swms', name: 'mdm-api', version: '1.0-SNAPSHOT'
+            dependency group: 'com.swms', name: 'domain-event', version: '1.0-SNAPSHOT'
             dependency group: 'com.swms', name: 'api-platform-api', version: '1.0-SNAPSHOT'
             dependency group: 'com.swms', name: 'common-utils', version: '1.0-SNAPSHOT'
 
@@ -77,6 +80,7 @@ subprojects {
             dependency group: 'org.pf4j', name: 'pf4j-spring', version: '0.8.0'
 
             /********************************* Utils ************************************/
+            dependency group: 'org.apache.commons', name: 'commons-lang3', version: '3.12.0'
             dependency group: 'org.apache.commons', name: 'commons-collections4', version: '4.4'
         }
 

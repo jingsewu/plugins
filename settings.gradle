@@ -1,4 +1,6 @@
 rootProject.name = 'plugins'
 
 include 'sentrix-mobile-lazy-waving-plugin'
+include 'sentrix-mobile-bin-code-outbound-plan-order-create-plugin'
+include 'sentrix-mobile-bin-code-sku-barcode-scan-plugin'
 
