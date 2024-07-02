@@ -25,6 +25,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class LazyOutboundWavePickingPlugin implements IOutboundWavePickingPlugin {
 
+    private static final String WAREHOUSE_CODE = "MOBILESENTRIX";
+
     private static final String GET_PACKING_STATUS_API_CODE = "GET_PACKING_STATUS";
 
     // 打包台状态：在线
@@ -39,7 +41,7 @@ public class LazyOutboundWavePickingPlugin implements IOutboundWavePickingPlugin
 
         Set<String> customerWaveNos = originalOutboundPlanOrders.stream()
             .map(OutboundPlanOrderDTO::getCustomerWaveNo).collect(Collectors.toSet());
-        List<OutboundPlanOrderDTO> outboundPlanOrderDTOS = outboundPlanOrderApi.findByCustomerWaveNos(customerWaveNos);
+        List<OutboundPlanOrderDTO> outboundPlanOrderDTOS = outboundPlanOrderApi.findByCustomerWaveNos(WAREHOUSE_CODE, customerWaveNos);
 
         Map<String, List<OutboundPlanOrderDTO>> outboundPlanOrderGroupMap = outboundPlanOrderDTOS.stream()
             .collect(Collectors.groupingBy(OutboundPlanOrderDTO::getCustomerWaveNo));
