@@ -1,0 +1,26 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.swms.plugins'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.swms:user-api'
+    implementation 'com.swms:wms-api'
+    implementation 'com.swms:plugin-extend'
+    implementation 'com.swms:domain-event'
+    implementation 'com.swms:common-utils'
+    implementation 'org.springframework:spring-web'
+    implementation 'org.pf4j:pf4j-spring'
+
+    annotationProcessor 'org.pf4j:pf4j-spring'
+}
+
+test {
+    useJUnitPlatform()
+}
