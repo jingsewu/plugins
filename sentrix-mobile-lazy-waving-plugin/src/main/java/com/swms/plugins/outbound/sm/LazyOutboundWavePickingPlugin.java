@@ -41,7 +41,7 @@ public class LazyOutboundWavePickingPlugin implements IOutboundWavePickingPlugin
 
         Set<String> customerWaveNos = originalOutboundPlanOrders.stream()
             .map(OutboundPlanOrderDTO::getCustomerWaveNo).collect(Collectors.toSet());
-        List<OutboundPlanOrderDTO> outboundPlanOrderDTOS = outboundPlanOrderApi.findByCustomerWaveNos(WAREHOUSE_CODE, customerWaveNos);
+        List<OutboundPlanOrderDTO> outboundPlanOrderDTOS = outboundPlanOrderApi.findByCustomerWaveNos(WAREHOUSE_CODE, customerWaveNos, false);
 
         Map<String, List<OutboundPlanOrderDTO>> outboundPlanOrderGroupMap = outboundPlanOrderDTOS.stream()
             .collect(Collectors.groupingBy(OutboundPlanOrderDTO::getCustomerWaveNo));
