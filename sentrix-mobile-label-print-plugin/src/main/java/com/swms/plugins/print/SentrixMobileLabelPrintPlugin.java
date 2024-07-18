@@ -30,6 +30,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.pf4j.Extension;
 import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.client.RestTemplate;
@@ -116,8 +118,7 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
 
         RestTemplate template = new RestTemplate();
         HttpEntity<String> entity = new HttpEntity<>(JsonUtils.obj2String(requestDTO));
-        Object response = template.postForObject(printURL, entity, Object.class);
-        log.info("trigger print success, response: {}", response);
+        template.postForLocation(printURL, entity);
     }
 
     private String replacePrintURL(PrintConfig config) {
@@ -153,15 +154,22 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
         List<TransferContainerRecordDTO> transferContainerRecordDTOS = transferContainerApi.findByPickingOrderIds(List.of(pickingOrderDTO.getId()));
         boolean isSplitFinished = transferContainerRecordDTOS.stream().anyMatch(v -> v.getTransferContainerStatus() == TransferContainerRecordStatusEnum.SEALED);
 
+        PrintPluginConfig printPluginConfig = getPrintPluginConfig();
         BooleanPair pair = BooleanPair.valueOf(isParentWave, isSplitFinished);
-        String requestURL = getRequestURL(pair, outboundPlanOrderDTOS.stream().findAny().get().getCustomerWaveNo());
+        String requestURL = getRequestURL(pair, outboundPlanOrderDTOS.stream().findAny().get().getCustomerWaveNo(), printPluginConfig);
         if (StringUtils.isEmpty(requestURL)) {
             log.warn("cannot get pdf url, picking order info: {}", pickingOrderDTO);
             return null;
         }
 
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("Authorization", printPluginConfig.getAuthorization());
+        headers.add("Content-Type", "application/json");
+
+        HttpEntity<String> entity = new HttpEntity<>("", headers);
+
         RestTemplate template = new RestTemplate();
-        ResponseEntity<PdfUrlResponse> responseEntity = template.getForEntity(requestURL, PdfUrlResponse.class);
+        ResponseEntity<PdfUrlResponse> responseEntity = template.exchange(requestURL, HttpMethod.GET, entity, PdfUrlResponse.class);
         if (!PdfUrlResponse.STATUS_SUCCESS.equals(Objects.requireNonNull(responseEntity.getBody()).getStatus())) {
             log.warn("MA response error, picking order id: {}, response: {}", pickingOrderDTO.getId(), responseEntity);
             return null;
@@ -170,13 +178,17 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
         return responseEntity.getBody().getUrl();
     }
 
-    private String getRequestURL(BooleanPair pair, String customerWaveNo) {
+    private PrintPluginConfig getPrintPluginConfig() {
+        return TenantPluginConfig.getTenantConfig(PLUGIN_ID, PrintPluginConfig.class);
+    }
+
+    private String getRequestURL(BooleanPair pair, String customerWaveNo, PrintPluginConfig printPluginConfig) {
         String requestURL = null;
         switch (pair) {
-            case TRUE_FALSE -> requestURL = TenantPluginConfig.getTenantConfig(PLUGIN_ID, PrintPluginConfig.class).getFirstLabelUrl();
-            case TRUE_TRUE -> requestURL = TenantPluginConfig.getTenantConfig(PLUGIN_ID, PrintPluginConfig.class).getSplitUrl();
-            case FALSE_TRUE -> requestURL = TenantPluginConfig.getTenantConfig(PLUGIN_ID, PrintPluginConfig.class).getAddToLabelUrl();
-            case FALSE_FALSE -> requestURL = TenantPluginConfig.getTenantConfig(PLUGIN_ID, PrintPluginConfig.class).getAddToSplitUrl();
+            case TRUE_FALSE -> requestURL = printPluginConfig.getFirstLabelUrl();
+            case TRUE_TRUE -> requestURL = printPluginConfig.getSplitUrl();
+            case FALSE_TRUE -> requestURL = printPluginConfig.getAddToLabelUrl();
+            case FALSE_FALSE -> requestURL = printPluginConfig.getAddToSplitUrl();
         }
         return Objects.requireNonNull(requestURL).replace("$customerWaveNo", customerWaveNo);
     }
