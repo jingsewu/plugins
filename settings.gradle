@@ -4,4 +4,5 @@ include 'sentrix-mobile-lazy-waving-plugin'
 include 'sentrix-mobile-bin-code-outbound-plan-order-create-plugin'
 include 'sentrix-mobile-bin-code-sku-barcode-scan-plugin'
 include 'sentrix-mobile-label-print-plugin'
+include 'sentrix-mobile-inbound-batch-attribute-collect'
 
