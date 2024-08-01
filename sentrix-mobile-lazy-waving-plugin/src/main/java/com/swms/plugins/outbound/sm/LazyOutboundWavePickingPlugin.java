@@ -80,19 +80,19 @@ public class LazyOutboundWavePickingPlugin implements IOutboundWavePickingPlugin
 
     private List<List<OutboundPlanOrderDTO>> waving(List<OutboundPlanOrderDTO> outboundPlanOrders) {
         log.debug("Waving outbound plan orders size: {}", outboundPlanOrders.size());
-        // 外部波次号为空的订单单组独成为一个波次
-        List<List<OutboundPlanOrderDTO>> emptyWaveNoOrders = outboundPlanOrders.stream()
+
+        // 外部波次号为空的订单单组按照指定工作站列表组成波次
+        Map<String, List<OutboundPlanOrderDTO>> emptyWaveNoWaveMap = outboundPlanOrders.stream()
             .filter(order -> StringUtils.isEmpty(order.getCustomerWaveNo()))
-            .map(List::of).toList();
+            .collect(Collectors.groupingBy(v -> StringUtils.join(v.getTargetWorkStationIds(), ",")));
 
         // 有波次号的订单按照波次号组波
         Map<String, List<OutboundPlanOrderDTO>> outboundWaveMap = outboundPlanOrders.stream()
             .filter(order -> StringUtils.isNotEmpty(order.getCustomerWaveNo()))
             .collect(Collectors.groupingBy(OutboundPlanOrderDTO::getCustomerWaveNo));
 
-        Collection<List<OutboundPlanOrderDTO>> results = CollectionUtils.union(emptyWaveNoOrders, outboundWaveMap.values());
-        log.debug("Waving success! empty waving no orders size: {}, has customer wave no plan orders size: {}",
-            emptyWaveNoOrders.size(), outboundWaveMap.values().size());
+        Collection<List<OutboundPlanOrderDTO>> results = CollectionUtils.union(emptyWaveNoWaveMap.values(), outboundWaveMap.values());
+        log.debug("Waving success! ");
         return new ArrayList<>(results);
     }
 }
