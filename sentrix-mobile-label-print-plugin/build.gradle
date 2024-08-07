@@ -10,7 +10,6 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.swms:user-api'
     implementation 'com.swms:wms-api'
     implementation 'com.swms:plugin-extend'
     implementation 'com.swms:domain-event'

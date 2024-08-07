@@ -1,6 +1,5 @@
 package com.swms.plugins.print;
 
-import com.swms.common.utils.user.UserContext;
 import com.swms.common.utils.utils.JsonUtils;
 import com.swms.plugin.extend.extensions.OperationContext;
 import com.swms.plugin.extend.extensions.configuration.TenantPluginConfig;
@@ -8,8 +7,6 @@ import com.swms.plugin.extend.wms.outbound.PrintPlugin;
 import com.swms.plugins.print.config.PrintConfig;
 import com.swms.plugins.print.config.PrintPluginConfig;
 import com.swms.plugins.print.dto.PrintRequestDTO;
-import com.swms.user.api.UserApi;
-import com.swms.user.api.dto.UserDTO;
 import com.swms.wms.api.basic.IPutWallApi;
 import com.swms.wms.api.basic.constants.PutWallSlotStatusEnum;
 import com.swms.wms.api.basic.dto.PutWallSlotDTO;
@@ -37,7 +34,9 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 @Slf4j
 @Extension
@@ -47,9 +46,10 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
     private static final String PLUGIN_ID = "Sentrix-Mobile-Label-Print-Plugin-0.0.1";
     private static final String PRINT_URL = "http://$host:$port/print";
 
+    private static final String PICKING_ORDER_ID = "pickingOrderId";
+
     private final IPutWallApi putWallApi;
     private final IPickingOrderApi pickingOrderApi;
-    private final UserApi userApi;
     private final IOutboundPlanOrderApi outboundPlanOrderApi;
     private final ITransferContainerApi transferContainerApi;
 
@@ -79,20 +79,22 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
 
             PrintConfig printConfig = getWorkStationPrintConfig(workStationId);
             triggerPrint(printConfig, pickingOrderDTO);
-        } else if (StringUtils.isNotEmpty(UserContext.getCurrentUser())) {
-            String userName = UserContext.getCurrentUser();
-            UserDTO user = userApi.getByUsername(userName);
-
-            List<PickingOrderDTO> pickingOrderDTOS = pickingOrderApi.findUncompletedByReceivedUserId(user.getId());
-
-            if (CollectionUtils.isEmpty(pickingOrderDTOS)) {
-                log.warn("connot find any received picking order");
-            }
-            PrintConfig printConfig = getManualAreaPrintConfig((String) event.getParameter());
-
-            pickingOrderDTOS.stream().findAny().ifPresent(pickingOrderDTO -> triggerPrint(printConfig, pickingOrderDTO));
         } else {
-            log.error("cannot find work station info or current user info, so we cannot trigger print");
+            Optional<Map<String, Object>> any = event.getTargetArgs().stream().findAny();
+            if (any.isEmpty() || !any.get().containsKey(PICKING_ORDER_ID)) {
+                log.warn("connot find picking order parameter");
+                return null;
+            }
+
+            Object pickingOrderId = any.get().get(PICKING_ORDER_ID);
+            PickingOrderDTO pickingOrderDTO = pickingOrderApi.getById(Long.valueOf(pickingOrderId.toString()));
+
+            if (pickingOrderDTO == null) {
+                log.warn("connot find any picking order use picking order id {}", pickingOrderId);
+            }
+
+            PrintConfig printConfig = getManualAreaPrintConfig((String) event.getParameter());
+            triggerPrint(printConfig, pickingOrderDTO);
         }
 
         return null;
