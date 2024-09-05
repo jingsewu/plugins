@@ -71,6 +71,7 @@ subprojects {
             dependency group: 'com.swms', name: 'plugin-extend', version: '1.0-SNAPSHOT'
             dependency group: 'com.swms', name: 'user-api', version: '1.0-SNAPSHOT'
             dependency group: 'com.swms', name: 'wms-api', version: '1.0-SNAPSHOT'
+            dependency group: 'com.swms', name: 'ems-api', version: '1.0-SNAPSHOT'
             dependency group: 'com.swms', name: 'mdm-api', version: '1.0-SNAPSHOT'
             dependency group: 'com.swms', name: 'station-api', version: '1.0-SNAPSHOT'
             dependency group: 'com.swms', name: 'wms-printer', version: '1.0-SNAPSHOT'
