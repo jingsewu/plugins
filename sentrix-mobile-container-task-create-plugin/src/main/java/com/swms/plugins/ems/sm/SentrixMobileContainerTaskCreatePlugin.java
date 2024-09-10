@@ -99,7 +99,14 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                 Map<String, Long> containerTaskSizeMap = containerTaskDTOS.stream()
                     .collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.counting()));
 
-                containerTaskDTOS.sort((taskA, taskB) -> {
+                Map<Boolean, List<ContainerTaskDTO>> containerTaskMap = containerTaskDTOS.stream()
+                    .collect(Collectors.groupingBy(t -> t.getTaskPriority() == null || t.getTaskPriority() == 0));
+
+                // 上游指定了优先级的搬箱任务
+                List<ContainerTaskDTO> customerPriorityTasks = containerTaskMap.get(Boolean.FALSE);
+                // 上游未指定优先级的搬箱任务
+                List<ContainerTaskDTO> noPriorityTasks = containerTaskMap.get(Boolean.TRUE);
+                noPriorityTasks.sort((taskA, taskB) -> {
                     // 订单优先级不同，则先判断订单优先级
                     if (!Objects.equals(taskA.getTaskPriority(), taskB.getTaskPriority())) {
                         return taskA.getTaskPriority().compareTo(taskB.getTaskPriority());
@@ -156,8 +163,11 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                     return 0;
                 });
 
+                customerPriorityTasks.forEach(task
+                    -> callback(task, containerTaskType, newCustomerTaskIds));
+
                 AtomicInteger priority = new AtomicInteger(1000);
-                containerTaskDTOS.forEach(task -> {
+                noPriorityTasks.forEach(task -> {
                     task.setTaskPriority(Math.max(priority.decrementAndGet(), 1));
                     callback(task, containerTaskType, newCustomerTaskIds);
                 });
