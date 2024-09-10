@@ -26,6 +26,7 @@ import org.pf4j.Extension;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -99,6 +100,11 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                     .collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.counting()));
 
                 containerTaskDTOS.sort((taskA, taskB) -> {
+                    // 订单优先级不同，则先判断订单优先级
+                    if (!Objects.equals(taskA.getTaskPriority(), taskB.getTaskPriority())) {
+                        return taskA.getTaskPriority().compareTo(taskB.getTaskPriority());
+                    }
+
                     String taskAContainerCode = taskA.getContainerCode();
                     String taskBContainerCode = taskB.getContainerCode();
                     // 如果货架号相同，直接返回相等
@@ -147,7 +153,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                         return taskADistance > taskBDistance ? -1 : 1;
                     }
 
-                    return taskA.getTaskPriority().compareTo(taskB.getTaskPriority());
+                    return 0;
                 });
 
                 AtomicInteger priority = new AtomicInteger(1000);
