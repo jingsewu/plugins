@@ -22,6 +22,7 @@ import com.swms.wms.api.task.dto.OperationTaskDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.pf4j.Extension;
+import org.springframework.util.CollectionUtils;
 
 import java.util.Collection;
 import java.util.List;
@@ -163,14 +164,18 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                     return 0;
                 });
 
-                customerPriorityTasks.forEach(task
-                    -> callback(task, containerTaskType, newCustomerTaskIds));
+                if (!CollectionUtils.isEmpty(customerPriorityTasks)) {
+                    customerPriorityTasks.forEach(task
+                        -> callback(task, containerTaskType, newCustomerTaskIds));
+                }
 
-                AtomicInteger priority = new AtomicInteger(1000);
-                noPriorityTasks.forEach(task -> {
-                    task.setTaskPriority(Math.max(priority.decrementAndGet(), 1));
-                    callback(task, containerTaskType, newCustomerTaskIds);
-                });
+                if (!CollectionUtils.isEmpty(noPriorityTasks)) {
+                    AtomicInteger priority = new AtomicInteger(1000);
+                    noPriorityTasks.forEach(task -> {
+                        task.setTaskPriority(Math.max(priority.decrementAndGet(), 1));
+                        callback(task, containerTaskType, newCustomerTaskIds);
+                    });
+                }
             });
     }
 
