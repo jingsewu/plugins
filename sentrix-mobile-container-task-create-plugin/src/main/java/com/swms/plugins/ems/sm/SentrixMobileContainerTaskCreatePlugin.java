@@ -167,7 +167,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                     int taskADistance = Math.abs(taskAPosition.getX() - workStationPosition.getX()) + Math.abs(taskAPosition.getY() - workStationPosition.getY());
                     int taskBDistance = Math.abs(taskBPosition.getX() - workStationPosition.getX()) + Math.abs(taskBPosition.getY() - workStationPosition.getY());
                     if (taskADistance != taskBDistance) {
-                        return taskADistance > taskBDistance ? -1 : 1;
+                        return taskADistance < taskBDistance ? -1 : 1;
                     }
 
                     return 0;
