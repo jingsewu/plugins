@@ -17,6 +17,10 @@ import com.swms.wms.api.basic.dto.ContainerDTO;
 import com.swms.wms.api.basic.dto.LocationDTO;
 import com.swms.wms.api.basic.dto.PositionDTO;
 import com.swms.wms.api.basic.dto.WorkStationDTO;
+import com.swms.wms.api.outbound.IOutboundWaveApi;
+import com.swms.wms.api.outbound.IPickingOrderApi;
+import com.swms.wms.api.outbound.dto.OutboundWaveDTO;
+import com.swms.wms.api.outbound.dto.PickingOrderDTO;
 import com.swms.wms.api.task.ITaskApi;
 import com.swms.wms.api.task.dto.OperationTaskDTO;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +31,7 @@ import org.springframework.util.CollectionUtils;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -38,6 +42,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCreatePlugin {
 
+    private final IOutboundWaveApi outboundWaveApi;
+    private final IPickingOrderApi pickingOrderApi;
     private final ITaskApi taskApi;
     private final IContainerTaskApi containerTaskApi;
     private final IContainerApi containerApi;
@@ -59,11 +65,23 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
         Set<String> destinations = containerTasks.stream().flatMap(task -> task.getDestinations().stream()).collect(Collectors.toSet());
 
-        List<ContainerTaskDTO> allContainerTaskDTOS = containerTaskApi.queryContainerTaskListByDestinations(destinations, ContainerTaskStatusEnum.processingStates, List.of(BusinessTaskTypeEnum.PICKING));
+        List<ContainerTaskDTO> allContainerTaskDTOS = containerTaskApi.queryContainerTaskListByDestinations(destinations, ContainerTaskStatusEnum.processingStates, List.of(BusinessTaskTypeEnum.PICKING)).stream()
+            .filter(v -> ContainerTaskTypeEnum.TRANSFER != v.getContainerTaskType()).toList();
 
         Set<Long> operationTaskIds = allContainerTaskDTOS.stream()
             .flatMap(task -> task.getRelations().stream()).map(ContainerTaskAndBusinessTaskRelationDTO::getCustomerTaskId).collect(Collectors.toSet());
         List<OperationTaskDTO> allOperationTaskDTOS = taskApi.queryTasks(operationTaskIds);
+        Set<Long> pickingOrderIds = allOperationTaskDTOS.stream().map(OperationTaskDTO::getOrderId).collect(Collectors.toSet());
+        List<PickingOrderDTO> pickingOrderDTOS = pickingOrderApi.findOrderByPickingOrderIds(pickingOrderIds);
+        Set<String> waveNos = pickingOrderDTOS.stream().map(PickingOrderDTO::getWaveNo).collect(Collectors.toSet());
+        List<OutboundWaveDTO> waveDTOS = outboundWaveApi.findByWaveNos(waveNos);
+
+        Map<Long, OperationTaskDTO> operationTaskDTOMap = allOperationTaskDTOS.stream().collect(Collectors.toMap(OperationTaskDTO::getId, Function.identity()));
+        Map<Long, PickingOrderDTO> pickingOrderDTOMap = pickingOrderDTOS.stream().collect(Collectors.toMap(PickingOrderDTO::getId, Function.identity()));
+        Map<String, OutboundWaveDTO> outboundWaveDTOMap = waveDTOS.stream().collect(Collectors.toMap(OutboundWaveDTO::getWaveNo, Function.identity()));
+
+        Map<String, Optional<Integer>> containerOrderPriorityMap = allContainerTaskDTOS.stream().collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.flatMapping(task
+            -> task.getRelations().stream().map(v -> outboundWaveDTOMap.get(pickingOrderDTOMap.get(operationTaskDTOMap.get(v.getCustomerTaskId()).getOrderId()).getWaveNo()).getPriority()), Collectors.maxBy(Integer::compareTo))));
 
         String warehouseCode = allOperationTaskDTOS.iterator().next().getWarehouseCode();
         Set<String> containerCodes = allContainerTaskDTOS.stream().map(ContainerTaskDTO::getContainerCode).collect(Collectors.toSet());
@@ -83,8 +101,6 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
             .forEach((workStationId, operationTaskDTOS) -> {
                 List<ContainerTaskDTO> containerTaskDTOS = containerTaskDTOMap.get(String.valueOf(workStationId));
 
-                Map<Long, OperationTaskDTO> operationTaskDTOMap = operationTaskDTOS.stream().collect(Collectors.toMap(OperationTaskDTO::getId, Function.identity()));
-
                 // 所有未完成订单需要的货架
                 Map<String, Set<Long>> containerCompleteOrders = operationTaskDTOS.stream()
                     .collect(Collectors.groupingBy(OperationTaskDTO::getSourceContainerCode, Collectors.mapping(OperationTaskDTO::getOrderId, Collectors.toSet())));
@@ -101,19 +117,16 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                     .collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.counting()));
 
                 Map<Boolean, List<ContainerTaskDTO>> containerTaskMap = containerTaskDTOS.stream()
-                    .collect(Collectors.groupingBy(t -> t.getTaskPriority() == null || t.getTaskPriority() == 0));
+                    .collect(Collectors.groupingBy(t -> containerOrderPriorityMap.get(t.getContainerCode()).isEmpty()
+                        || containerOrderPriorityMap.get(t.getContainerCode()).get() == 0));
 
                 // 上游未指定优先级的搬箱任务
                 List<ContainerTaskDTO> noPriorityTasks = containerTaskMap.get(Boolean.TRUE);
                 if (!CollectionUtils.isEmpty(noPriorityTasks)) {
                     noPriorityTasks.sort((taskA, taskB) -> {
-                        // 订单优先级不同，则先判断订单优先级
-                        if (!Objects.equals(taskA.getTaskPriority(), taskB.getTaskPriority())) {
-                            return taskA.getTaskPriority().compareTo(taskB.getTaskPriority());
-                        }
-
                         String taskAContainerCode = taskA.getContainerCode();
                         String taskBContainerCode = taskB.getContainerCode();
+
                         // 如果货架号相同，直接返回相等
                         if (taskAContainerCode.equals(taskBContainerCode)) {
                             return 0;
@@ -167,8 +180,11 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                 // 上游指定了优先级的搬箱任务
                 List<ContainerTaskDTO> customerPriorityTasks = containerTaskMap.get(Boolean.FALSE);
                 if (!CollectionUtils.isEmpty(customerPriorityTasks)) {
-                    customerPriorityTasks.forEach(task
-                        -> callback(task, containerTaskType, newCustomerTaskIds));
+                    customerPriorityTasks.forEach(task -> {
+                        Optional<Integer> priority = containerOrderPriorityMap.get(task.getContainerCode());
+                        priority.ifPresent(task::setTaskPriority);
+                        callback(task, containerTaskType, newCustomerTaskIds);
+                    });
                 }
 
                 if (!CollectionUtils.isEmpty(noPriorityTasks)) {
