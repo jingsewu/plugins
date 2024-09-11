@@ -105,8 +105,17 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
                 // 上游指定了优先级的搬箱任务
                 List<ContainerTaskDTO> customerPriorityTasks = containerTaskMap.get(Boolean.FALSE);
+                if (!CollectionUtils.isEmpty(customerPriorityTasks)) {
+                    customerPriorityTasks.forEach(task
+                        -> callback(task, containerTaskType, newCustomerTaskIds));
+                }
+
                 // 上游未指定优先级的搬箱任务
                 List<ContainerTaskDTO> noPriorityTasks = containerTaskMap.get(Boolean.TRUE);
+                if (CollectionUtils.isEmpty(noPriorityTasks)) {
+                    return;
+                }
+
                 noPriorityTasks.sort((taskA, taskB) -> {
                     // 订单优先级不同，则先判断订单优先级
                     if (!Objects.equals(taskA.getTaskPriority(), taskB.getTaskPriority())) {
@@ -164,18 +173,11 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                     return 0;
                 });
 
-                if (!CollectionUtils.isEmpty(customerPriorityTasks)) {
-                    customerPriorityTasks.forEach(task
-                        -> callback(task, containerTaskType, newCustomerTaskIds));
-                }
-
-                if (!CollectionUtils.isEmpty(noPriorityTasks)) {
-                    AtomicInteger priority = new AtomicInteger(1000);
-                    noPriorityTasks.forEach(task -> {
-                        task.setTaskPriority(Math.max(priority.decrementAndGet(), 1));
-                        callback(task, containerTaskType, newCustomerTaskIds);
-                    });
-                }
+                AtomicInteger priority = new AtomicInteger(1000);
+                noPriorityTasks.forEach(task -> {
+                    task.setTaskPriority(Math.max(priority.decrementAndGet(), 1));
+                    callback(task, containerTaskType, newCustomerTaskIds);
+                });
             });
     }
 
