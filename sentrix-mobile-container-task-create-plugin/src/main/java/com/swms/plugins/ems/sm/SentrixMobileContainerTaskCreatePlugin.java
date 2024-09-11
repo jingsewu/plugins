@@ -103,6 +103,67 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                 Map<Boolean, List<ContainerTaskDTO>> containerTaskMap = containerTaskDTOS.stream()
                     .collect(Collectors.groupingBy(t -> t.getTaskPriority() == null || t.getTaskPriority() == 0));
 
+                // 上游未指定优先级的搬箱任务
+                List<ContainerTaskDTO> noPriorityTasks = containerTaskMap.get(Boolean.TRUE);
+                if (!CollectionUtils.isEmpty(noPriorityTasks)) {
+                    noPriorityTasks.sort((taskA, taskB) -> {
+                        // 订单优先级不同，则先判断订单优先级
+                        if (!Objects.equals(taskA.getTaskPriority(), taskB.getTaskPriority())) {
+                            return taskA.getTaskPriority().compareTo(taskB.getTaskPriority());
+                        }
+
+                        String taskAContainerCode = taskA.getContainerCode();
+                        String taskBContainerCode = taskB.getContainerCode();
+                        // 如果货架号相同，直接返回相等
+                        if (taskAContainerCode.equals(taskBContainerCode)) {
+                            return 0;
+                        }
+
+                        // 释放槽口多的货架优先
+                        Set<Long> taskAOrders = containerCompleteOrders.get(taskAContainerCode);
+                        Set<Long> taskBOrders = containerCompleteOrders.get(taskBContainerCode);
+                        long taskACompleteOrderSize = taskAOrders.stream()
+                            .filter(orderId -> orderRequiredContainers.get(orderId).stream().allMatch(c -> c.equals(taskAContainerCode))).count();
+                        long taskBCompleteOrderSize = taskBOrders.stream()
+                            .filter(orderId -> orderRequiredContainers.get(orderId).stream().allMatch(c -> c.equals(taskBContainerCode))).count();
+                        if (taskACompleteOrderSize != taskBCompleteOrderSize) {
+                            return taskACompleteOrderSize > taskBCompleteOrderSize ? -1 : 1;
+                        }
+
+                        // 满足订单行最多的货架优先
+                        Set<Long> taskAOrderLines = containerCompleteLines.get(taskAContainerCode);
+                        Set<Long> taskBOrderLines = containerCompleteLines.get(taskBContainerCode);
+                        if (taskAOrderLines.size() != taskBOrderLines.size()) {
+                            return taskAOrderLines.size() > taskBOrderLines.size() ? -1 : 1;
+                        }
+
+                        // 货架任务数最少的货架优先
+                        Long taskAContainerTaskCount = containerTaskSizeMap.get(taskAContainerCode);
+                        Long taskBContainerTaskCount = containerTaskSizeMap.get(taskBContainerCode);
+                        if (!taskAContainerTaskCount.equals(taskBContainerTaskCount)) {
+                            return taskBContainerTaskCount.compareTo(taskAContainerTaskCount);
+                        }
+
+                        // 按照距离排序
+                        ContainerDTO taskAContainerDTO = containerDTOMap.get(taskAContainerCode);
+                        ContainerDTO taskBContainerDTO = containerDTOMap.get(taskBContainerCode);
+                        LocationDTO taskALocationDTO = locationDTOMap.get(taskAContainerDTO.getLocationCode());
+                        LocationDTO taskBLocationDTO = locationDTOMap.get(taskBContainerDTO.getLocationCode());
+                        PositionDTO taskAPosition = taskALocationDTO.getPosition();
+                        PositionDTO taskBPosition = taskBLocationDTO.getPosition();
+                        WorkStationDTO workStationDTO = workStationDTOMap.get(workStationId);
+                        PositionDTO workStationPosition = workStationDTO.getPosition();
+
+                        int taskADistance = Math.abs(taskAPosition.getX() - workStationPosition.getX()) + Math.abs(taskAPosition.getY() - workStationPosition.getY());
+                        int taskBDistance = Math.abs(taskBPosition.getX() - workStationPosition.getX()) + Math.abs(taskBPosition.getY() - workStationPosition.getY());
+                        if (taskADistance != taskBDistance) {
+                            return taskADistance < taskBDistance ? -1 : 1;
+                        }
+
+                        return 0;
+                    });
+                }
+
                 // 上游指定了优先级的搬箱任务
                 List<ContainerTaskDTO> customerPriorityTasks = containerTaskMap.get(Boolean.FALSE);
                 if (!CollectionUtils.isEmpty(customerPriorityTasks)) {
@@ -110,74 +171,13 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                         -> callback(task, containerTaskType, newCustomerTaskIds));
                 }
 
-                // 上游未指定优先级的搬箱任务
-                List<ContainerTaskDTO> noPriorityTasks = containerTaskMap.get(Boolean.TRUE);
-                if (CollectionUtils.isEmpty(noPriorityTasks)) {
-                    return;
+                if (!CollectionUtils.isEmpty(noPriorityTasks)) {
+                    AtomicInteger priority = new AtomicInteger(1000);
+                    noPriorityTasks.forEach(task -> {
+                        task.setTaskPriority(Math.max(priority.decrementAndGet(), 1));
+                        callback(task, containerTaskType, newCustomerTaskIds);
+                    });
                 }
-
-                noPriorityTasks.sort((taskA, taskB) -> {
-                    // 订单优先级不同，则先判断订单优先级
-                    if (!Objects.equals(taskA.getTaskPriority(), taskB.getTaskPriority())) {
-                        return taskA.getTaskPriority().compareTo(taskB.getTaskPriority());
-                    }
-
-                    String taskAContainerCode = taskA.getContainerCode();
-                    String taskBContainerCode = taskB.getContainerCode();
-                    // 如果货架号相同，直接返回相等
-                    if (taskAContainerCode.equals(taskBContainerCode)) {
-                        return 0;
-                    }
-
-                    // 释放槽口多的货架优先
-                    Set<Long> taskAOrders = containerCompleteOrders.get(taskAContainerCode);
-                    Set<Long> taskBOrders = containerCompleteOrders.get(taskBContainerCode);
-                    long taskACompleteOrderSize = taskAOrders.stream()
-                        .filter(orderId -> orderRequiredContainers.get(orderId).stream().allMatch(c -> c.equals(taskAContainerCode))).count();
-                    long taskBCompleteOrderSize = taskBOrders.stream()
-                        .filter(orderId -> orderRequiredContainers.get(orderId).stream().allMatch(c -> c.equals(taskBContainerCode))).count();
-                    if (taskACompleteOrderSize != taskBCompleteOrderSize) {
-                        return taskACompleteOrderSize > taskBCompleteOrderSize ? -1 : 1;
-                    }
-
-                    // 满足订单行最多的货架优先
-                    Set<Long> taskAOrderLines = containerCompleteLines.get(taskAContainerCode);
-                    Set<Long> taskBOrderLines = containerCompleteLines.get(taskBContainerCode);
-                    if (taskAOrderLines.size() != taskBOrderLines.size()) {
-                        return taskAOrderLines.size() > taskBOrderLines.size() ? -1 : 1;
-                    }
-
-                    // 货架任务数最少的货架优先
-                    Long taskAContainerTaskCount = containerTaskSizeMap.get(taskAContainerCode);
-                    Long taskBContainerTaskCount = containerTaskSizeMap.get(taskBContainerCode);
-                    if (!taskAContainerTaskCount.equals(taskBContainerTaskCount)) {
-                        return taskBContainerTaskCount.compareTo(taskAContainerTaskCount);
-                    }
-
-                    // 按照距离排序
-                    ContainerDTO taskAContainerDTO = containerDTOMap.get(taskAContainerCode);
-                    ContainerDTO taskBContainerDTO = containerDTOMap.get(taskBContainerCode);
-                    LocationDTO taskALocationDTO = locationDTOMap.get(taskAContainerDTO.getLocationCode());
-                    LocationDTO taskBLocationDTO = locationDTOMap.get(taskBContainerDTO.getLocationCode());
-                    PositionDTO taskAPosition = taskALocationDTO.getPosition();
-                    PositionDTO taskBPosition = taskBLocationDTO.getPosition();
-                    WorkStationDTO workStationDTO = workStationDTOMap.get(workStationId);
-                    PositionDTO workStationPosition = workStationDTO.getPosition();
-
-                    int taskADistance = Math.abs(taskAPosition.getX() - workStationPosition.getX()) + Math.abs(taskAPosition.getY() - workStationPosition.getY());
-                    int taskBDistance = Math.abs(taskBPosition.getX() - workStationPosition.getX()) + Math.abs(taskBPosition.getY() - workStationPosition.getY());
-                    if (taskADistance != taskBDistance) {
-                        return taskADistance < taskBDistance ? -1 : 1;
-                    }
-
-                    return 0;
-                });
-
-                AtomicInteger priority = new AtomicInteger(1000);
-                noPriorityTasks.forEach(task -> {
-                    task.setTaskPriority(Math.max(priority.decrementAndGet(), 1));
-                    callback(task, containerTaskType, newCustomerTaskIds);
-                });
             });
     }
 
