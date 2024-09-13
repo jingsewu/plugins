@@ -65,10 +65,10 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
         Set<String> destinations = containerTasks.stream().flatMap(task -> task.getDestinations().stream()).collect(Collectors.toSet());
 
-        List<ContainerTaskDTO> allContainerTaskDTOS = containerTaskApi.queryContainerTaskListByDestinations(destinations, ContainerTaskStatusEnum.processingStates, List.of(BusinessTaskTypeEnum.PICKING)).stream()
-            .filter(v -> ContainerTaskTypeEnum.TRANSFER != v.getContainerTaskType()).toList();
+        List<ContainerTaskDTO> allContainerTasks = containerTaskApi.queryContainerTaskListAndExcludeContainerTaskTypes(ContainerTaskStatusEnum.processingStates, List.of(BusinessTaskTypeEnum.PICKING), List.of(ContainerTaskTypeEnum.TRANSFER));
+        List<ContainerTaskDTO> allDestinationContainerTasks = allContainerTasks.stream().filter(task -> task.getDestinations().stream().anyMatch(destinations::contains)).toList();
 
-        Set<Long> operationTaskIds = allContainerTaskDTOS.stream()
+        Set<Long> operationTaskIds = allDestinationContainerTasks.stream()
             .flatMap(task -> task.getRelations().stream()).map(ContainerTaskAndBusinessTaskRelationDTO::getCustomerTaskId).collect(Collectors.toSet());
         List<OperationTaskDTO> allOperationTaskDTOS = taskApi.queryTasks(operationTaskIds);
         Set<Long> pickingOrderIds = allOperationTaskDTOS.stream().map(OperationTaskDTO::getOrderId).collect(Collectors.toSet());
@@ -80,20 +80,24 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
         Map<Long, PickingOrderDTO> pickingOrderDTOMap = pickingOrderDTOS.stream().collect(Collectors.toMap(PickingOrderDTO::getId, Function.identity()));
         Map<String, OutboundWaveDTO> outboundWaveDTOMap = waveDTOS.stream().collect(Collectors.toMap(OutboundWaveDTO::getWaveNo, Function.identity()));
 
-        Map<String, Optional<Integer>> containerOrderPriorityMap = allContainerTaskDTOS.stream().collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.flatMapping(task
+        Map<String, Optional<Integer>> containerOrderPriorityMap = allDestinationContainerTasks.stream().collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.flatMapping(task
             -> task.getRelations().stream().map(v -> outboundWaveDTOMap.get(pickingOrderDTOMap.get(operationTaskDTOMap.get(v.getCustomerTaskId()).getOrderId()).getWaveNo()).getPriority()), Collectors.maxBy(Integer::compareTo))));
 
         String warehouseCode = allOperationTaskDTOS.iterator().next().getWarehouseCode();
-        Set<String> containerCodes = allContainerTaskDTOS.stream().map(ContainerTaskDTO::getContainerCode).collect(Collectors.toSet());
+        Set<String> containerCodes = allDestinationContainerTasks.stream().map(ContainerTaskDTO::getContainerCode).collect(Collectors.toSet());
         Collection<ContainerDTO> containerDTOS = containerApi.queryContainer(containerCodes, warehouseCode);
         List<LocationDTO> locationDTOS = locationApi.getByShelfCodes(containerCodes);
         List<WorkStationDTO> workStationDTOS = workStationApi.queryWorkStation(destinations.stream().map(Long::valueOf).collect(Collectors.toSet()));
 
-        Map<String, List<ContainerTaskDTO>> containerTaskDTOMap = allContainerTaskDTOS.stream()
+        Map<String, List<ContainerTaskDTO>> containerTaskDTOMap = allDestinationContainerTasks.stream()
             .collect(Collectors.groupingBy(v -> v.getDestinations().iterator().next()));
         Map<String, ContainerDTO> containerDTOMap = containerDTOS.stream().collect(Collectors.toMap(ContainerDTO::getContainerCode, Function.identity()));
         Map<String, LocationDTO> locationDTOMap = locationDTOS.stream().collect(Collectors.toMap(LocationDTO::getLocationCode, Function.identity()));
         Map<Long, WorkStationDTO> workStationDTOMap = workStationDTOS.stream().collect(Collectors.toMap(WorkStationDTO::getId, Function.identity()));
+
+        // 每个货架的目标工作站列表
+        Map<String, Set<String>> containerTaskDestinationSizeMap = allContainerTasks.stream()
+            .collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.flatMapping(t -> t.getDestinations().stream(), Collectors.toSet())));
 
         // 按照工作站对所有搬箱任务进行分组，分别重新排序
         allOperationTaskDTOS.stream()
@@ -111,10 +115,6 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                 // 所有未完成货架可以满足的订单行
                 Map<String, Set<Long>> containerCompleteLines = operationTaskDTOS.stream()
                     .collect(Collectors.groupingBy(OperationTaskDTO::getSourceContainerCode, Collectors.mapping(OperationTaskDTO::getDetailId, Collectors.toSet())));
-
-//                // 每个货架的任务数
-                Map<String, Long> containerTaskSizeMap = containerTaskDTOS.stream()
-                    .collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.counting()));
 
                 Map<Boolean, List<ContainerTaskDTO>> containerTaskMap = containerTaskDTOS.stream()
                     .collect(Collectors.groupingBy(t -> containerOrderPriorityMap.get(t.getContainerCode()).isEmpty()
@@ -151,10 +151,10 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                         }
 
                         // 货架任务数最少的货架优先
-                        Long taskAContainerTaskCount = containerTaskSizeMap.get(taskAContainerCode);
-                        Long taskBContainerTaskCount = containerTaskSizeMap.get(taskBContainerCode);
-                        if (!taskAContainerTaskCount.equals(taskBContainerTaskCount)) {
-                            return taskAContainerTaskCount.compareTo(taskBContainerTaskCount);
+                        Integer taskAContainerTaskDestinationCount = containerTaskDestinationSizeMap.get(taskAContainerCode).size();
+                        Integer taskBContainerTaskDestinationCount = containerTaskDestinationSizeMap.get(taskBContainerCode).size();
+                        if (!taskAContainerTaskDestinationCount.equals(taskBContainerTaskDestinationCount)) {
+                            return taskAContainerTaskDestinationCount.compareTo(taskBContainerTaskDestinationCount);
                         }
 
                         // 按照距离排序
