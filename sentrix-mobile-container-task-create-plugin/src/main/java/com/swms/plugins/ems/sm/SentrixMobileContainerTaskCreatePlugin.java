@@ -112,9 +112,9 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                 Map<String, Set<Long>> containerCompleteLines = operationTaskDTOS.stream()
                     .collect(Collectors.groupingBy(OperationTaskDTO::getSourceContainerCode, Collectors.mapping(OperationTaskDTO::getDetailId, Collectors.toSet())));
 
-                // 每个货架的任务数
-                Map<String, Long> containerTaskSizeMap = containerTaskDTOS.stream()
-                    .collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.counting()));
+//                // 每个货架的任务数
+//                Map<String, Long> containerTaskSizeMap = containerTaskDTOS.stream()
+//                    .collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.counting()));
 
                 Map<Boolean, List<ContainerTaskDTO>> containerTaskMap = containerTaskDTOS.stream()
                     .collect(Collectors.groupingBy(t -> containerOrderPriorityMap.get(t.getContainerCode()).isEmpty()
@@ -151,11 +151,11 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                         }
 
                         // 货架任务数最少的货架优先
-                        Long taskAContainerTaskCount = containerTaskSizeMap.get(taskAContainerCode);
-                        Long taskBContainerTaskCount = containerTaskSizeMap.get(taskBContainerCode);
-                        if (!taskAContainerTaskCount.equals(taskBContainerTaskCount)) {
-                            return taskBContainerTaskCount.compareTo(taskAContainerTaskCount);
-                        }
+//                        Long taskAContainerTaskCount = containerTaskSizeMap.get(taskAContainerCode);
+//                        Long taskBContainerTaskCount = containerTaskSizeMap.get(taskBContainerCode);
+//                        if (!taskAContainerTaskCount.equals(taskBContainerTaskCount)) {
+//                            return taskAContainerTaskCount.compareTo(taskBContainerTaskCount);
+//                        }
 
                         // 按照距离排序
                         ContainerDTO taskAContainerDTO = containerDTOMap.get(taskAContainerCode);
