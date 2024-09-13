@@ -129,6 +129,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
                         // 如果货架号相同，直接返回相等
                         if (taskAContainerCode.equals(taskBContainerCode)) {
+                            log.debug("taskA {} and taskB {} has the same container code {}", taskA.getId(), taskB.getId(), taskAContainerCode);
                             return 0;
                         }
 
@@ -140,6 +141,8 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                         long taskBCompleteOrderSize = taskBOrders.stream()
                             .filter(orderId -> orderRequiredContainers.get(orderId).stream().allMatch(c -> c.equals(taskBContainerCode))).count();
                         if (taskACompleteOrderSize != taskBCompleteOrderSize) {
+                            log.debug("taskA {} container code {} complete order size {} and taskB {} container code {} complete order size {}",
+                                taskA.getId(), taskAContainerCode, taskACompleteOrderSize, taskB.getId(), taskBContainerCode, taskBCompleteOrderSize);
                             return taskACompleteOrderSize > taskBCompleteOrderSize ? -1 : 1;
                         }
 
@@ -147,6 +150,8 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                         Set<Long> taskAOrderLines = containerCompleteLines.get(taskAContainerCode);
                         Set<Long> taskBOrderLines = containerCompleteLines.get(taskBContainerCode);
                         if (taskAOrderLines.size() != taskBOrderLines.size()) {
+                            log.debug("taskA {} container code {} order line size {} and taskB {} container code {} order line size {}",
+                                taskA.getId(), taskAContainerCode, taskAOrderLines, taskB.getId(), taskBContainerCode, taskBOrderLines);
                             return taskAOrderLines.size() > taskBOrderLines.size() ? -1 : 1;
                         }
 
@@ -154,6 +159,8 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                         Integer taskAContainerTaskDestinationCount = containerTaskDestinationSizeMap.get(taskAContainerCode).size();
                         Integer taskBContainerTaskDestinationCount = containerTaskDestinationSizeMap.get(taskBContainerCode).size();
                         if (!taskAContainerTaskDestinationCount.equals(taskBContainerTaskDestinationCount)) {
+                            log.debug("taskA {} container code {} container destination count {} and taskB {} container code {} container destination count {}",
+                                taskA.getId(), taskAContainerCode, taskAContainerTaskDestinationCount, taskB.getId(), taskBContainerCode, taskBContainerTaskDestinationCount);
                             return taskAContainerTaskDestinationCount.compareTo(taskBContainerTaskDestinationCount);
                         }
 
@@ -170,6 +177,8 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                         int taskADistance = Math.abs(taskAPosition.getX() - workStationPosition.getX()) + Math.abs(taskAPosition.getY() - workStationPosition.getY());
                         int taskBDistance = Math.abs(taskBPosition.getX() - workStationPosition.getX()) + Math.abs(taskBPosition.getY() - workStationPosition.getY());
                         if (taskADistance != taskBDistance) {
+                            log.debug("The both task has different distance to workstation {}, taskA {} container code {} distance {} and taskB {} container code {} distance {}",
+                                workStationDTO.getStationCode(), taskA.getId(), taskAContainerCode, taskADistance, taskB.getId(), taskBContainerCode, taskBDistance);
                             return taskADistance < taskBDistance ? -1 : 1;
                         }
 
