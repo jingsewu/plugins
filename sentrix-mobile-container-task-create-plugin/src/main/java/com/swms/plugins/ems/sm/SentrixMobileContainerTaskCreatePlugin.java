@@ -113,8 +113,8 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                     .collect(Collectors.groupingBy(OperationTaskDTO::getSourceContainerCode, Collectors.mapping(OperationTaskDTO::getDetailId, Collectors.toSet())));
 
 //                // 每个货架的任务数
-//                Map<String, Long> containerTaskSizeMap = containerTaskDTOS.stream()
-//                    .collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.counting()));
+                Map<String, Long> containerTaskSizeMap = containerTaskDTOS.stream()
+                    .collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.counting()));
 
                 Map<Boolean, List<ContainerTaskDTO>> containerTaskMap = containerTaskDTOS.stream()
                     .collect(Collectors.groupingBy(t -> containerOrderPriorityMap.get(t.getContainerCode()).isEmpty()
@@ -151,11 +151,11 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                         }
 
                         // 货架任务数最少的货架优先
-//                        Long taskAContainerTaskCount = containerTaskSizeMap.get(taskAContainerCode);
-//                        Long taskBContainerTaskCount = containerTaskSizeMap.get(taskBContainerCode);
-//                        if (!taskAContainerTaskCount.equals(taskBContainerTaskCount)) {
-//                            return taskAContainerTaskCount.compareTo(taskBContainerTaskCount);
-//                        }
+                        Long taskAContainerTaskCount = containerTaskSizeMap.get(taskAContainerCode);
+                        Long taskBContainerTaskCount = containerTaskSizeMap.get(taskBContainerCode);
+                        if (!taskAContainerTaskCount.equals(taskBContainerTaskCount)) {
+                            return taskAContainerTaskCount.compareTo(taskBContainerTaskCount);
+                        }
 
                         // 按照距离排序
                         ContainerDTO taskAContainerDTO = containerDTOMap.get(taskAContainerCode);
