@@ -151,7 +151,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                         Set<Long> taskBOrderLines = containerCompleteLines.get(taskBContainerCode);
                         if (taskAOrderLines.size() != taskBOrderLines.size()) {
                             log.debug("taskA {} container code {} order line size {} and taskB {} container code {} order line size {}",
-                                taskA.getId(), taskAContainerCode, taskAOrderLines, taskB.getId(), taskBContainerCode, taskBOrderLines);
+                                taskA.getId(), taskAContainerCode, taskAOrderLines.size(), taskB.getId(), taskBContainerCode, taskBOrderLines.size());
                             return taskAOrderLines.size() > taskBOrderLines.size() ? -1 : 1;
                         }
 
