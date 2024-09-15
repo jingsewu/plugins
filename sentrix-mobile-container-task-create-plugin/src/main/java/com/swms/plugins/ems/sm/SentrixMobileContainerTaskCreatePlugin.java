@@ -22,6 +22,7 @@ import com.swms.wms.api.outbound.IPickingOrderApi;
 import com.swms.wms.api.outbound.dto.OutboundWaveDTO;
 import com.swms.wms.api.outbound.dto.PickingOrderDTO;
 import com.swms.wms.api.task.ITaskApi;
+import com.swms.wms.api.task.constants.OperationTaskStatusEnum;
 import com.swms.wms.api.task.dto.OperationTaskDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -70,7 +71,8 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
         Set<Long> operationTaskIds = allDestinationContainerTasks.stream()
             .flatMap(task -> task.getRelations().stream()).map(ContainerTaskAndBusinessTaskRelationDTO::getCustomerTaskId).collect(Collectors.toSet());
-        List<OperationTaskDTO> allOperationTaskDTOS = taskApi.queryTasks(operationTaskIds);
+        List<OperationTaskDTO> allOperationTaskDTOS = taskApi.queryTasks(operationTaskIds).stream()
+            .filter(task -> OperationTaskStatusEnum.isStatusNonComplete(task.getTaskStatus())).toList();
         Set<Long> pickingOrderIds = allOperationTaskDTOS.stream().map(OperationTaskDTO::getOrderId).collect(Collectors.toSet());
         List<PickingOrderDTO> pickingOrderDTOS = pickingOrderApi.findOrderByPickingOrderIds(pickingOrderIds);
         Set<String> waveNos = pickingOrderDTOS.stream().map(PickingOrderDTO::getWaveNo).collect(Collectors.toSet());
