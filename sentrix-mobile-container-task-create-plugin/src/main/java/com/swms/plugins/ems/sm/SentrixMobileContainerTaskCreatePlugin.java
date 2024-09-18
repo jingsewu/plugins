@@ -73,6 +73,12 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
             .flatMap(task -> task.getRelations().stream()).map(ContainerTaskAndBusinessTaskRelationDTO::getCustomerTaskId).collect(Collectors.toSet());
         List<OperationTaskDTO> allOperationTaskDTOS = taskApi.queryTasks(operationTaskIds).stream()
             .filter(task -> OperationTaskStatusEnum.isStatusNonComplete(task.getTaskStatus())).toList();
+
+        Set<Long> completedOperationTaskIds = allOperationTaskDTOS.stream().map(OperationTaskDTO::getId).collect(Collectors.toSet());
+        // 过滤掉实际已经完成的搬箱任务
+        allDestinationContainerTasks = allDestinationContainerTasks.stream()
+            .filter(task -> task.getRelations().stream().anyMatch(relation -> completedOperationTaskIds.contains(relation.getCustomerTaskId()))).toList();
+
         Set<Long> pickingOrderIds = allOperationTaskDTOS.stream().map(OperationTaskDTO::getOrderId).collect(Collectors.toSet());
         List<PickingOrderDTO> pickingOrderDTOS = pickingOrderApi.findOrderByPickingOrderIds(pickingOrderIds);
         Set<String> waveNos = pickingOrderDTOS.stream().map(PickingOrderDTO::getWaveNo).collect(Collectors.toSet());
@@ -82,7 +88,8 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
         Map<Long, PickingOrderDTO> pickingOrderDTOMap = pickingOrderDTOS.stream().collect(Collectors.toMap(PickingOrderDTO::getId, Function.identity()));
         Map<String, OutboundWaveDTO> outboundWaveDTOMap = waveDTOS.stream().collect(Collectors.toMap(OutboundWaveDTO::getWaveNo, Function.identity()));
 
-        Map<String, Optional<Integer>> containerOrderPriorityMap = allDestinationContainerTasks.stream().collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.flatMapping(task
+        Map<String, Optional<Integer>> containerOrderPriorityMap = allDestinationContainerTasks.stream()
+            .collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.flatMapping(task
             -> task.getRelations().stream().map(v -> outboundWaveDTOMap.get(pickingOrderDTOMap.get(operationTaskDTOMap.get(v.getCustomerTaskId()).getOrderId()).getWaveNo()).getPriority()), Collectors.maxBy(Integer::compareTo))));
 
         String warehouseCode = allOperationTaskDTOS.iterator().next().getWarehouseCode();
