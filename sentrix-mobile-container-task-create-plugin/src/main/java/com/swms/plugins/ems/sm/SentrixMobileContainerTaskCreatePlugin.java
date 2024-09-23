@@ -74,10 +74,10 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
         List<OperationTaskDTO> allOperationTaskDTOS = taskApi.queryTasks(operationTaskIds).stream()
             .filter(task -> OperationTaskStatusEnum.isStatusNonComplete(task.getTaskStatus())).toList();
 
-        Set<Long> completedOperationTaskIds = allOperationTaskDTOS.stream().map(OperationTaskDTO::getId).collect(Collectors.toSet());
+        Set<Long> uncompletedOperationTaskIds = allOperationTaskDTOS.stream().map(OperationTaskDTO::getId).collect(Collectors.toSet());
         // 过滤掉实际已经完成的搬箱任务
         allDestinationContainerTasks = allDestinationContainerTasks.stream()
-            .filter(task -> task.getRelations().stream().anyMatch(relation -> completedOperationTaskIds.contains(relation.getCustomerTaskId()))).toList();
+            .filter(task -> task.getRelations().stream().anyMatch(relation -> uncompletedOperationTaskIds.contains(relation.getCustomerTaskId()))).toList();
 
         Set<Long> pickingOrderIds = allOperationTaskDTOS.stream().map(OperationTaskDTO::getOrderId).collect(Collectors.toSet());
         List<PickingOrderDTO> pickingOrderDTOS = pickingOrderApi.findOrderByPickingOrderIds(pickingOrderIds);
