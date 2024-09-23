@@ -204,7 +204,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                     customerPriorityTasks.forEach(task -> {
                         Optional<Integer> priority = containerOrderPriorityMap.get(task.getContainerCode());
                         priority.ifPresent(task::setTaskPriority);
-                        callback(task, containerTaskType, newCustomerTaskIds);
+//                        callback(task, containerTaskType, newCustomerTaskIds);
                     });
                 }
 
@@ -212,9 +212,15 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                     AtomicInteger priority = new AtomicInteger(1000);
                     noPriorityTasks.forEach(task -> {
                         task.setTaskPriority(Math.max(priority.decrementAndGet(), 1));
-                        callback(task, containerTaskType, newCustomerTaskIds);
+//                        callback(task, containerTaskType, newCustomerTaskIds);
                     });
                 }
+            });
+
+        // 所有工作站的任务计算完优先级后，再倒序排序后，按顺序发送给 RCS
+        allContainerTasks.stream()
+            .sorted((taskA, taskB) -> taskB.getTaskPriority().compareTo(taskA.getTaskPriority())).forEach(task -> {
+                callback(task, containerTaskType, newCustomerTaskIds);
             });
     }
 
