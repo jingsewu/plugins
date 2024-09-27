@@ -3,6 +3,7 @@ package com.swms.plugins.ems.sm;
 import com.swms.api.platform.api.ICallbackApi;
 import com.swms.api.platform.api.constants.CallbackApiTypeEnum;
 import com.swms.api.platform.api.dto.callback.CallbackMessage;
+import com.swms.common.utils.utils.RedisUtils;
 import com.swms.ems.api.IContainerTaskApi;
 import com.swms.ems.api.constants.BusinessTaskTypeEnum;
 import com.swms.ems.api.constants.ContainerTaskStatusEnum;
@@ -26,10 +27,12 @@ import com.swms.wms.api.task.constants.OperationTaskStatusEnum;
 import com.swms.wms.api.task.dto.OperationTaskDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.tuple.Pair;
 import org.pf4j.Extension;
 import org.springframework.util.CollectionUtils;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -51,6 +54,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
     private final ILocationApi locationApi;
     private final IWorkStationApi workStationApi;
     private final ICallbackApi callbackApi;
+    private final RedisUtils redisUtils;
 
     @Override
     public void create(List<ContainerTaskDTO> containerTasks, ContainerTaskTypeEnum containerTaskType) {
@@ -210,8 +214,11 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
                 if (!CollectionUtils.isEmpty(noPriorityTasks)) {
                     AtomicInteger priority = new AtomicInteger(1000);
+                    Map<Pair<String, String>, Integer> containerPriorityMap = new HashMap<>();
                     noPriorityTasks.forEach(task -> {
-                        task.setTaskPriority(Math.max(priority.decrementAndGet(), 1));
+                        Pair<String, String> key = Pair.of(task.getContainerCode(), task.getContainerFace());
+                        Integer taskPriority = containerPriorityMap.computeIfAbsent(key, v -> Math.max(priority.decrementAndGet(), 1));
+                        task.setTaskPriority(taskPriority);
 //                        callback(task, containerTaskType, newCustomerTaskIds);
                     });
                 }
