@@ -10,6 +10,7 @@ import com.swms.ems.api.constants.ContainerTaskStatusEnum;
 import com.swms.ems.api.constants.ContainerTaskTypeEnum;
 import com.swms.ems.api.dto.ContainerTaskAndBusinessTaskRelationDTO;
 import com.swms.ems.api.dto.ContainerTaskDTO;
+import com.swms.ems.api.dto.UpdateContainerTaskDTO;
 import com.swms.plugin.extend.ems.ContainerTaskCreatePlugin;
 import com.swms.wms.api.basic.IContainerApi;
 import com.swms.wms.api.basic.ILocationApi;
@@ -31,10 +32,12 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.pf4j.Extension;
 import org.springframework.util.CollectionUtils;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -115,6 +118,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
         Map<String, Set<String>> containerTaskDestinationSizeMap = allContainerTasks.stream()
             .collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.flatMapping(t -> t.getDestinations().stream(), Collectors.toSet())));
 
+        List<ContainerTaskDTO> priorityChangedTasks = new ArrayList<>();
         // 按照工作站对所有搬箱任务进行分组，分别重新排序
         allOperationTaskDTOS.stream()
             .collect(Collectors.groupingBy(v -> v.getAssignedStationSlot().keySet().iterator().next()))
@@ -207,8 +211,12 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                 if (!CollectionUtils.isEmpty(customerPriorityTasks)) {
                     customerPriorityTasks.forEach(task -> {
                         Optional<Integer> priority = containerOrderPriorityMap.get(task.getContainerCode());
-                        priority.ifPresent(task::setTaskPriority);
-//                        callback(task, containerTaskType, newCustomerTaskIds);
+                        priority.ifPresent(value -> {
+                            if (!Objects.equals(task.getTaskPriority(), value)) {
+                                task.setTaskPriority(value);
+                                priorityChangedTasks.add(task);
+                            }
+                        });
                     });
                 }
 
@@ -218,17 +226,28 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                     noPriorityTasks.forEach(task -> {
                         Pair<String, String> key = Pair.of(task.getContainerCode(), task.getContainerFace());
                         Integer taskPriority = containerPriorityMap.computeIfAbsent(key, v -> Math.max(priority.decrementAndGet(), 1));
-                        task.setTaskPriority(taskPriority);
-//                        callback(task, containerTaskType, newCustomerTaskIds);
+                        if (!Objects.equals(task.getTaskPriority(), taskPriority)) {
+                            task.setTaskPriority(taskPriority);
+                            priorityChangedTasks.add(task);
+                        }
                     });
                 }
             });
 
         // 所有工作站的任务计算完优先级后，再倒序排序后，按顺序发送给 RCS
-        allDestinationContainerTasks.stream()
+        priorityChangedTasks.stream()
             .sorted((taskA, taskB) -> taskB.getTaskPriority().compareTo(taskA.getTaskPriority())).forEach(task -> {
                 callback(task, containerTaskType, newCustomerTaskIds);
             });
+
+        // 记录新的优先级
+        List<UpdateContainerTaskDTO> updateContainerTaskDTOS = priorityChangedTasks.stream().map(task -> {
+            UpdateContainerTaskDTO updateContainerTaskDTO = new UpdateContainerTaskDTO();
+            updateContainerTaskDTO.setTaskCode(task.getTaskCode());
+            updateContainerTaskDTO.setTaskPriority(task.getTaskPriority());
+            return updateContainerTaskDTO;
+        }).toList();
+        containerTaskApi.updateContainerTaskPriority(updateContainerTaskDTOS);
     }
 
     private void callback(ContainerTaskDTO taskDTO, ContainerTaskTypeEnum bizType, List<Long> newCustomerTaskIds) {
