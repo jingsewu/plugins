@@ -71,6 +71,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
             return;
         }
 
+        Set<String> newContainerTaskCodes = containerTasks.stream().map(ContainerTaskDTO::getTaskCode).collect(Collectors.toSet());
         Set<String> destinations = containerTasks.stream().flatMap(task -> task.getDestinations().stream()).collect(Collectors.toSet());
 
         List<ContainerTaskDTO> allContainerTasks = containerTaskApi.queryContainerTaskListAndExcludeContainerTaskTypes(ContainerTaskStatusEnum.processingStates, List.of(BusinessTaskTypeEnum.PICKING), List.of(ContainerTaskTypeEnum.TRANSFER));
@@ -210,10 +211,13 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                 List<ContainerTaskDTO> customerPriorityTasks = containerTaskMap.get(Boolean.FALSE);
                 if (!CollectionUtils.isEmpty(customerPriorityTasks)) {
                     customerPriorityTasks.forEach(task -> {
+
                         Optional<Integer> priority = containerOrderPriorityMap.get(task.getContainerCode());
                         priority.ifPresent(value -> {
                             if (!Objects.equals(task.getTaskPriority(), value)) {
                                 task.setTaskPriority(value);
+                                priorityChangedTasks.add(task);
+                            } else if (newContainerTaskCodes.contains(task.getTaskCode())) {
                                 priorityChangedTasks.add(task);
                             }
                         });
@@ -236,9 +240,8 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
         // 所有工作站的任务计算完优先级后，再倒序排序后，按顺序发送给 RCS
         priorityChangedTasks.stream()
-            .sorted((taskA, taskB) -> taskB.getTaskPriority().compareTo(taskA.getTaskPriority())).forEach(task -> {
-                callback(task, containerTaskType, newCustomerTaskIds);
-            });
+            .sorted((taskA, taskB) -> taskB.getTaskPriority().compareTo(taskA.getTaskPriority()))
+            .forEach(task -> callback(task, containerTaskType, newCustomerTaskIds));
 
         // 记录新的优先级
         List<UpdateContainerTaskDTO> updateContainerTaskDTOS = priorityChangedTasks.stream().map(task -> {
