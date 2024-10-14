@@ -92,14 +92,16 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
             callbackApi.callback(CallbackApiTypeEnum.CONTAINER_LEAVE, task.getBusinessTaskType().name(), new CallbackMessage<>().setData(containerOperation));
         });
 
-        ContainerTaskDTO containerTaskDTO = containerTasks.stream().findAny().orElseThrow();
-        BusinessTaskTypeEnum businessTaskType = containerTaskDTO.getBusinessTaskType();
-        // 非出库工作站的货架离开，直接返回
-        if (!BusinessTaskTypeEnum.PICKING.equals(businessTaskType)) {
-            return;
-        }
+        Optional<ContainerTaskDTO> containerTaskDTOOpt = containerTasks.stream().findAny();
+        containerTaskDTOOpt.ifPresent(containerTaskDTO -> {
+            BusinessTaskTypeEnum businessTaskType = containerTaskDTO.getBusinessTaskType();
+            // 非出库工作站的货架离开，直接返回
+            if (!BusinessTaskTypeEnum.PICKING.equals(businessTaskType)) {
+                return;
+            }
 
-        resortContainerTasks(containerTasks, containerTaskDTO.getContainerTaskType(), Collections.emptyList());
+            resortContainerTasks(containerTasks, containerTaskDTO.getContainerTaskType(), Collections.emptyList());
+        });
     }
 
     private void resortContainerTasks(List<ContainerTaskDTO> containerTasks, ContainerTaskTypeEnum containerTaskType, List<Long> newCustomerTaskIds) {
