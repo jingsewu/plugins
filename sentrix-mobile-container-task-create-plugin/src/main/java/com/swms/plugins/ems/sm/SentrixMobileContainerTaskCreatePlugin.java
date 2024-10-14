@@ -3,11 +3,11 @@ package com.swms.plugins.ems.sm;
 import com.swms.api.platform.api.ICallbackApi;
 import com.swms.api.platform.api.constants.CallbackApiTypeEnum;
 import com.swms.api.platform.api.dto.callback.CallbackMessage;
-import com.swms.common.utils.utils.RedisUtils;
 import com.swms.ems.api.IContainerTaskApi;
 import com.swms.ems.api.constants.BusinessTaskTypeEnum;
 import com.swms.ems.api.constants.ContainerTaskStatusEnum;
 import com.swms.ems.api.constants.ContainerTaskTypeEnum;
+import com.swms.ems.api.dto.ContainerOperation;
 import com.swms.ems.api.dto.ContainerTaskAndBusinessTaskRelationDTO;
 import com.swms.ems.api.dto.ContainerTaskDTO;
 import com.swms.ems.api.dto.UpdateContainerTaskDTO;
@@ -31,9 +31,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
 import org.pf4j.Extension;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StopWatch;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +59,6 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
     private final ILocationApi locationApi;
     private final IWorkStationApi workStationApi;
     private final ICallbackApi callbackApi;
-    private final RedisUtils redisUtils;
 
     @Override
     public void create(List<ContainerTaskDTO> containerTasks, ContainerTaskTypeEnum containerTaskType) {
@@ -71,10 +72,48 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
             return;
         }
 
+        resortContainerTasks(containerTasks, containerTaskType, newCustomerTaskIds);
+    }
+
+    @Override
+    public void leave(ContainerOperation containerOperation, List<ContainerTaskDTO> containerTasks) {
+        ContainerOperation.ContainerOperationDetail container = containerOperation.getContainerOperationDetails().iterator().next();
+        // 批量完成所有搬箱任务
+        containerTasks.stream().findFirst().ifPresent(task -> {
+            List<ContainerOperation.ContainerOperationDetail> details = containerTasks.stream().map(t
+                -> new ContainerOperation.ContainerOperationDetail()
+                .setTaskCode(t.getTaskCode())
+                .setContainerCode(t.getContainerCode())
+                .setContainerFace(t.getContainerFace())
+                .setLocationCode(container.getLocationCode())
+                .setOperationType(container.getOperationType())).toList();
+
+            containerOperation.setContainerOperationDetails(details);
+            callbackApi.callback(CallbackApiTypeEnum.CONTAINER_LEAVE, task.getBusinessTaskType().name(), new CallbackMessage<>().setData(containerOperation));
+        });
+
+        ContainerTaskDTO containerTaskDTO = containerTasks.stream().findAny().orElseThrow();
+        BusinessTaskTypeEnum businessTaskType = containerTaskDTO.getBusinessTaskType();
+        // 非出库工作站的货架离开，直接返回
+        if (!BusinessTaskTypeEnum.PICKING.equals(businessTaskType)) {
+            return;
+        }
+
+        resortContainerTasks(containerTasks, containerTaskDTO.getContainerTaskType(), Collections.emptyList());
+    }
+
+    private void resortContainerTasks(List<ContainerTaskDTO> containerTasks, ContainerTaskTypeEnum containerTaskType, List<Long> newCustomerTaskIds) {
+        StopWatch stopWatch = new StopWatch("sentrix-mobile-container-task-create-plugin");
+        stopWatch.start("prepare data");
         Set<String> newContainerTaskCodes = containerTasks.stream().map(ContainerTaskDTO::getTaskCode).collect(Collectors.toSet());
         Set<String> destinations = containerTasks.stream().flatMap(task -> task.getDestinations().stream()).collect(Collectors.toSet());
 
         List<ContainerTaskDTO> allContainerTasks = containerTaskApi.queryContainerTaskListAndExcludeContainerTaskTypes(ContainerTaskStatusEnum.processingStates, List.of(BusinessTaskTypeEnum.PICKING), List.of(ContainerTaskTypeEnum.TRANSFER));
+        if (CollectionUtils.isEmpty(allContainerTasks)) {
+            log.info("All container tasks are completed");
+            return;
+        }
+
         List<ContainerTaskDTO> allDestinationContainerTasks = allContainerTasks.stream().filter(task -> task.getDestinations().stream().anyMatch(destinations::contains)).toList();
 
         Set<Long> operationTaskIds = allDestinationContainerTasks.stream()
@@ -118,7 +157,9 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
         // 每个货架的目标工作站列表
         Map<String, Set<String>> containerTaskDestinationSizeMap = allContainerTasks.stream()
             .collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.flatMapping(t -> t.getDestinations().stream(), Collectors.toSet())));
+        stopWatch.stop();
 
+        stopWatch.start("First sort all tasks");
         List<ContainerTaskDTO> priorityChangedTasks = new ArrayList<>();
         // 按照工作站对所有搬箱任务进行分组，分别重新排序
         allOperationTaskDTOS.stream()
@@ -237,12 +278,16 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                     });
                 }
             });
+        stopWatch.stop();
 
+        stopWatch.start("Second sort priority changed tasks");
         // 所有工作站的任务计算完优先级后，再倒序排序后，按顺序发送给 RCS
         priorityChangedTasks.stream()
             .sorted((taskA, taskB) -> taskB.getTaskPriority().compareTo(taskA.getTaskPriority()))
             .forEach(task -> callback(task, containerTaskType, newCustomerTaskIds));
+        stopWatch.stop();
 
+        stopWatch.start("Send priority changed tasks to RCS");
         // 记录新的优先级
         List<UpdateContainerTaskDTO> updateContainerTaskDTOS = priorityChangedTasks.stream().map(task -> {
             UpdateContainerTaskDTO updateContainerTaskDTO = new UpdateContainerTaskDTO();
@@ -251,6 +296,9 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
             return updateContainerTaskDTO;
         }).toList();
         containerTaskApi.updateContainerTaskPriority(updateContainerTaskDTOS);
+        stopWatch.stop();
+
+        log.debug("Total cost info: {}", stopWatch.prettyPrint());
     }
 
     private void callback(ContainerTaskDTO taskDTO, ContainerTaskTypeEnum bizType, List<Long> newCustomerTaskIds) {
