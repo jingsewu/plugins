@@ -146,7 +146,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
         String warehouseCode = allOperationTaskDTOS.iterator().next().getWarehouseCode();
         Set<String> containerCodes = allDestinationContainerTasks.stream().map(ContainerTaskDTO::getContainerCode).collect(Collectors.toSet());
-        Collection<ContainerDTO> containerDTOS = containerApi.queryContainer(containerCodes, warehouseCode);
+        Collection<ContainerDTO> containerDTOS = containerApi.queryContainers(containerCodes, warehouseCode);
         List<LocationDTO> locationDTOS = locationApi.getByShelfCodes(containerCodes);
         List<WorkStationDTO> workStationDTOS = workStationApi.queryWorkStation(destinations.stream().map(Long::valueOf).collect(Collectors.toSet()));
 
