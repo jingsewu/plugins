@@ -12,10 +12,8 @@ import com.swms.ems.api.dto.ContainerTaskAndBusinessTaskRelationDTO;
 import com.swms.ems.api.dto.ContainerTaskDTO;
 import com.swms.ems.api.dto.UpdateContainerTaskDTO;
 import com.swms.plugin.extend.ems.ContainerTaskCreatePlugin;
-import com.swms.wms.api.basic.IContainerApi;
 import com.swms.wms.api.basic.ILocationApi;
 import com.swms.wms.api.basic.IWorkStationApi;
-import com.swms.wms.api.basic.dto.ContainerDTO;
 import com.swms.wms.api.basic.dto.LocationDTO;
 import com.swms.wms.api.basic.dto.PositionDTO;
 import com.swms.wms.api.basic.dto.WorkStationDTO;
@@ -34,7 +32,6 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.util.StopWatch;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -55,7 +52,6 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
     private final IPickingOrderApi pickingOrderApi;
     private final ITaskApi taskApi;
     private final IContainerTaskApi containerTaskApi;
-    private final IContainerApi containerApi;
     private final ILocationApi locationApi;
     private final IWorkStationApi workStationApi;
     private final ICallbackApi callbackApi;
@@ -139,21 +135,19 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
         Map<String, Optional<Integer>> containerOrderPriorityMap = allDestinationContainerTasks.stream()
             .collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.flatMapping(task
-            -> task.getRelations().stream()
+                -> task.getRelations().stream()
                 // 排除已经取消或完成的 relation
                 .filter(r -> operationTaskDTOMap.containsKey(r.getCustomerTaskId()))
                 .map(r -> outboundWaveDTOMap.get(pickingOrderDTOMap.get(operationTaskDTOMap.get(r.getCustomerTaskId()).getOrderId()).getWaveNo()).getPriority()), Collectors.maxBy(Integer::compareTo))));
 
         String warehouseCode = allOperationTaskDTOS.iterator().next().getWarehouseCode();
         Set<String> containerCodes = allDestinationContainerTasks.stream().map(ContainerTaskDTO::getContainerCode).collect(Collectors.toSet());
-        Collection<ContainerDTO> containerDTOS = containerApi.queryContainers(containerCodes, warehouseCode);
         List<LocationDTO> locationDTOS = locationApi.getByShelfCodes(containerCodes);
         List<WorkStationDTO> workStationDTOS = workStationApi.queryWorkStation(destinations.stream().map(Long::valueOf).collect(Collectors.toSet()));
 
         Map<String, List<ContainerTaskDTO>> containerTaskDTOMap = allDestinationContainerTasks.stream()
             .collect(Collectors.groupingBy(v -> v.getDestinations().iterator().next()));
-        Map<String, ContainerDTO> containerDTOMap = containerDTOS.stream().collect(Collectors.toMap(ContainerDTO::getContainerCode, Function.identity()));
-        Map<String, LocationDTO> locationDTOMap = locationDTOS.stream().collect(Collectors.toMap(LocationDTO::getLocationCode, Function.identity()));
+        Map<String, LocationDTO> locationDTOMap = locationDTOS.stream().collect(Collectors.toMap(LocationDTO::getShelfCode, Function.identity()));
         Map<Long, WorkStationDTO> workStationDTOMap = workStationDTOS.stream().collect(Collectors.toMap(WorkStationDTO::getId, Function.identity()));
 
         // 每个货架的目标工作站列表
@@ -229,10 +223,8 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                         }
 
                         // 按照距离排序
-                        ContainerDTO taskAContainerDTO = containerDTOMap.get(taskAContainerCode);
-                        ContainerDTO taskBContainerDTO = containerDTOMap.get(taskBContainerCode);
-                        LocationDTO taskALocationDTO = locationDTOMap.get(taskAContainerDTO.getLocationCode());
-                        LocationDTO taskBLocationDTO = locationDTOMap.get(taskBContainerDTO.getLocationCode());
+                        LocationDTO taskALocationDTO = locationDTOMap.get(taskAContainerCode);
+                        LocationDTO taskBLocationDTO = locationDTOMap.get(taskBContainerCode);
                         PositionDTO taskAPosition = taskALocationDTO.getPosition();
                         PositionDTO taskBPosition = taskBLocationDTO.getPosition();
                         WorkStationDTO workStationDTO = workStationDTOMap.get(workStationId);
