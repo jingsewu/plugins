@@ -31,14 +31,7 @@ import org.pf4j.Extension;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StopWatch;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -140,7 +133,6 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                 .filter(r -> operationTaskDTOMap.containsKey(r.getCustomerTaskId()))
                 .map(r -> outboundWaveDTOMap.get(pickingOrderDTOMap.get(operationTaskDTOMap.get(r.getCustomerTaskId()).getOrderId()).getWaveNo()).getPriority()), Collectors.maxBy(Integer::compareTo))));
 
-        String warehouseCode = allOperationTaskDTOS.iterator().next().getWarehouseCode();
         Set<String> containerCodes = allDestinationContainerTasks.stream().map(ContainerTaskDTO::getContainerCode).collect(Collectors.toSet());
         List<LocationDTO> locationDTOS = locationApi.getByShelfCodes(containerCodes);
         List<WorkStationDTO> workStationDTOS = workStationApi.queryWorkStation(destinations.stream().map(Long::valueOf).collect(Collectors.toSet()));
