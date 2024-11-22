@@ -122,6 +122,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
         Set<String> waveNos = pickingOrderDTOS.stream().map(PickingOrderDTO::getWaveNo).collect(Collectors.toSet());
         List<OutboundWaveDTO> waveDTOS = outboundWaveApi.findByWaveNos(waveNos);
 
+        String warehouseCode = pickingOrderDTOS.iterator().next().getWarehouseCode();
         Map<Long, OperationTaskDTO> operationTaskDTOMap = allOperationTaskDTOS.stream().collect(Collectors.toMap(OperationTaskDTO::getId, Function.identity()));
         Map<Long, PickingOrderDTO> pickingOrderDTOMap = pickingOrderDTOS.stream().collect(Collectors.toMap(PickingOrderDTO::getId, Function.identity()));
         Map<String, OutboundWaveDTO> outboundWaveDTOMap = waveDTOS.stream().collect(Collectors.toMap(OutboundWaveDTO::getWaveNo, Function.identity()));
@@ -134,7 +135,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                 .map(r -> outboundWaveDTOMap.get(pickingOrderDTOMap.get(operationTaskDTOMap.get(r.getCustomerTaskId()).getOrderId()).getWaveNo()).getPriority()), Collectors.maxBy(Integer::compareTo))));
 
         Set<String> containerCodes = allDestinationContainerTasks.stream().map(ContainerTaskDTO::getContainerCode).collect(Collectors.toSet());
-        List<LocationDTO> locationDTOS = locationApi.getByShelfCodes(containerCodes);
+        List<LocationDTO> locationDTOS = locationApi.getByShelfCodes(containerCodes, warehouseCode);
         List<WorkStationDTO> workStationDTOS = workStationApi.queryWorkStation(destinations.stream().map(Long::valueOf).collect(Collectors.toSet()));
 
         Map<String, List<ContainerTaskDTO>> containerTaskDTOMap = allDestinationContainerTasks.stream()
