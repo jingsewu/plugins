@@ -109,6 +109,12 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
         Set<Long> operationTaskIds = allDestinationContainerTasks.stream()
             .flatMap(task -> task.getRelations().stream()).map(ContainerTaskAndBusinessTaskRelationDTO::getCustomerTaskId).collect(Collectors.toSet());
+
+        if (CollectionUtils.isEmpty(operationTaskIds)) {
+            log.info("All operation tasks are completed");
+            return;
+        }
+
         List<OperationTaskDTO> allOperationTaskDTOS = taskApi.queryTasks(operationTaskIds).stream()
             .filter(task -> OperationTaskStatusEnum.isStatusNonComplete(task.getTaskStatus())).toList();
         if (CollectionUtils.isEmpty(allOperationTaskDTOS)) {
