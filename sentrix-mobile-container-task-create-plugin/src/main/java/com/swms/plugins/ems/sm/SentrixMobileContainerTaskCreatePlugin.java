@@ -11,6 +11,8 @@ import com.swms.ems.api.dto.ContainerOperation;
 import com.swms.ems.api.dto.ContainerTaskAndBusinessTaskRelationDTO;
 import com.swms.ems.api.dto.ContainerTaskDTO;
 import com.swms.ems.api.dto.UpdateContainerTaskDTO;
+import com.swms.mdm.api.config.ISystemConfigApi;
+import com.swms.mdm.api.config.dto.SystemConfigDTO;
 import com.swms.plugin.extend.ems.ContainerTaskCreatePlugin;
 import com.swms.wms.api.basic.ILocationApi;
 import com.swms.wms.api.basic.IWorkStationApi;
@@ -48,6 +50,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
     private final ILocationApi locationApi;
     private final IWorkStationApi workStationApi;
     private final ICallbackApi callbackApi;
+    private final ISystemConfigApi systemConfigApi;
 
     @Override
     public void create(List<ContainerTaskDTO> containerTasks, ContainerTaskTypeEnum containerTaskType) {
@@ -105,7 +108,13 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
             return;
         }
 
-        List<ContainerTaskDTO> allDestinationContainerTasks = allContainerTasks.stream().filter(task -> task.getDestinations().stream().anyMatch(destinations::contains)).toList();
+        SystemConfigDTO.BasicConfigDTO basicConfig = systemConfigApi.get().getBasicConfig();
+        Set<String> staticContainerCodes = basicConfig.getStaticContainerConfig().stream()
+                .map(SystemConfigDTO.BasicConfigDTO.StaticContainerConfig::getContainerCode).collect(Collectors.toSet());
+
+        List<ContainerTaskDTO> allDestinationContainerTasks = allContainerTasks.stream()
+                .filter(task -> !staticContainerCodes.contains(task.getContainerCode()) && task.getDestinations().stream().anyMatch(destinations::contains))
+                .toList();
 
         Set<Long> operationTaskIds = allDestinationContainerTasks.stream()
             .flatMap(task -> task.getRelations().stream()).map(ContainerTaskAndBusinessTaskRelationDTO::getCustomerTaskId).collect(Collectors.toSet());

@@ -11,6 +11,7 @@ repositories {
 
 dependencies {
     implementation 'com.swms:api-platform-api'
+    implementation 'com.swms:mdm-api'
     implementation 'com.swms:wms-api'
     implementation 'com.swms:ems-api'
     implementation 'com.swms:plugin-extend'
