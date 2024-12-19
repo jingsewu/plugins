@@ -237,8 +237,8 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                         // 按照距离排序
                         LocationDTO taskALocationDTO = locationDTOMap.get(taskAContainerCode);
                         LocationDTO taskBLocationDTO = locationDTOMap.get(taskBContainerCode);
-                        PositionDTO taskAPosition = taskALocationDTO.getPosition();
-                        PositionDTO taskBPosition = taskBLocationDTO.getPosition();
+                        PositionDTO taskAPosition = taskALocationDTO == null ? PositionDTO.UNKNOWN_POSITION : taskALocationDTO.getPosition();
+                        PositionDTO taskBPosition = taskBLocationDTO == null ? PositionDTO.UNKNOWN_POSITION : taskBLocationDTO.getPosition();
                         WorkStationDTO workStationDTO = workStationDTOMap.get(workStationId);
                         PositionDTO workStationPosition = workStationDTO.getPosition();
 
