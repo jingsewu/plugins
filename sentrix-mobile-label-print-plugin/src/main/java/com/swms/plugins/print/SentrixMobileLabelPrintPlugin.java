@@ -56,65 +56,99 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
     @Override
     public Void doOperation(OperationContext<PrintEvent> operationContext) {
         PrintEvent event = operationContext.getOperationObject();
-        log.info("received print event: {}", event);
+        log.info("Received print event: {}", event);
 
         Long workStationId = event.getWorkStationId();
         if (workStationId != null) {
-            Object parameter = event.getParameter();
-            PutWallSlotDTO putWallSlot = putWallApi.getPutWallSlot((String) parameter, workStationId);
-            if (putWallSlot == null) {
-                log.warn("cannot find putWallSlot use work station id : {}, parameter : {}", workStationId, parameter);
-                return null;
-            }
-            if (PutWallSlotStatusEnum.BOUND.equals(putWallSlot.getPutWallSlotStatus()) || putWallSlot.getPickingOrderId() == null) {
-                log.warn("put wall slot is not bounding, or picking order id is null, work station id: {}, put wall slot: {}, put wall slot status: {}",
-                    workStationId, putWallSlot.getPutWallSlotCode(), putWallSlot.getPutWallSlotStatus());
-                return null;
-            }
-            PickingOrderDTO pickingOrderDTO = pickingOrderApi.getById(putWallSlot.getPickingOrderId());
-            if (pickingOrderDTO == null || PickingOrderStatusEnum.isFinalStatues(pickingOrderDTO.getPickingOrderStatus())) {
-                log.warn("picking order is null, or picking order is finished, picking order id: {}", putWallSlot.getPickingOrderId());
-                return null;
-            }
-
-            PrintConfig printConfig = getWorkStationPrintConfig(workStationId);
-            triggerPrint(printConfig, pickingOrderDTO);
+            handleWorkStationPrint(workStationId, event);
         } else {
-            Optional<Map<String, Object>> any = event.getTargetArgs().stream().findAny();
-            if (any.isEmpty() || !any.get().containsKey(PICKING_ORDER_ID)) {
-                log.warn("connot find picking order parameter");
-                return null;
-            }
-
-            Object pickingOrderId = any.get().get(PICKING_ORDER_ID);
-            PickingOrderDTO pickingOrderDTO = pickingOrderApi.getById(Long.valueOf(pickingOrderId.toString()));
-
-            if (pickingOrderDTO == null) {
-                log.warn("connot find any picking order use picking order id {}", pickingOrderId);
-            }
-
-            PrintConfig printConfig = getManualAreaPrintConfig((String) event.getParameter());
-            triggerPrint(printConfig, pickingOrderDTO);
+            handleManualAreaPrint(event);
         }
-
         return null;
     }
 
+    /**
+     * Handle print logic when a workstation ID is available.
+     */
+    private void handleWorkStationPrint(Long workStationId, PrintEvent event) {
+        String parameter = String.valueOf(event.getParameter());
+        PutWallSlotDTO putWallSlot = putWallApi.getPutWallSlot(parameter, workStationId);
+
+        if (putWallSlot == null) {
+            log.warn("Cannot find PutWallSlot for workstation ID: {}, parameter: {}", workStationId, parameter);
+            return;
+        }
+
+        // Check slot status and picking order
+        if (PutWallSlotStatusEnum.BOUND.equals(putWallSlot.getPutWallSlotStatus())
+                || putWallSlot.getPickingOrderId() == null) {
+
+            log.warn("PutWallSlot not bound or picking order is null, station: {}, slot code: {}, status: {}",
+                    workStationId, putWallSlot.getPutWallSlotCode(), putWallSlot.getPutWallSlotStatus());
+            return;
+        }
+
+        PickingOrderDTO pickingOrderDTO = pickingOrderApi.getById(putWallSlot.getPickingOrderId());
+        if (pickingOrderDTO == null
+                || PickingOrderStatusEnum.isFinalStatues(pickingOrderDTO.getPickingOrderStatus())) {
+
+            log.warn("Picking order is null or already finished, order ID: {}", putWallSlot.getPickingOrderId());
+            return;
+        }
+
+        // Retrieve config and trigger print
+        PrintConfig printConfig = getWorkStationPrintConfig(workStationId);
+        triggerPrint(printConfig, pickingOrderDTO);
+    }
+
+    /**
+     * Handle print logic for manual area (no workstation ID).
+     */
+    private void handleManualAreaPrint(PrintEvent event) {
+        // Attempt to fetch pickingOrderId from target arguments
+        Optional<Map<String, Object>> args = event.getTargetArgs().stream().findAny();
+        if (args.isEmpty() || !args.get().containsKey(PICKING_ORDER_ID)) {
+            log.warn("Cannot find pickingOrderId parameter in targetArgs.");
+            return;
+        }
+
+        Long pickingOrderId = Long.parseLong(args.get().get(PICKING_ORDER_ID).toString());
+        PickingOrderDTO pickingOrderDTO = pickingOrderApi.getById(pickingOrderId);
+        if (pickingOrderDTO == null) {
+            log.warn("Cannot find picking order by ID: {}", pickingOrderId);
+            return;
+        }
+
+        // Retrieve config for manual area
+        String locationCode = String.valueOf(event.getParameter());
+        PrintConfig printConfig = getManualAreaPrintConfig(locationCode);
+        triggerPrint(printConfig, pickingOrderDTO);
+    }
+
+    /**
+     * Fetch printer config for a given workstation ID.
+     */
     private PrintConfig getWorkStationPrintConfig(Long workStationId) {
         PrintPluginConfig tenantConfig = TenantPluginConfig.getTenantConfig(PLUGIN_ID, PrintPluginConfig.class);
         return tenantConfig.getStationPrintConfig().get(String.valueOf(workStationId));
     }
 
+    /**
+     * Fetch printer config for a manual location code.
+     */
     private PrintConfig getManualAreaPrintConfig(String locationCode) {
         PrintPluginConfig tenantConfig = TenantPluginConfig.getTenantConfig(PLUGIN_ID, PrintPluginConfig.class);
         return tenantConfig.getManualAreaPrintConfig().get(locationCode);
     }
 
+    /**
+     * Build a print request DTO and call the external print service.
+     */
     private void triggerPrint(PrintConfig config, PickingOrderDTO pickingOrderDTO) {
-        String printURL = replacePrintURL(config);
+        String printURL = buildPrintUrl(config);
         PrintRequestDTO requestDTO = buildPrintRequestDTO(config.getPrintName(), pickingOrderDTO);
         if (requestDTO == null) {
-            log.error("build print request failed, picking order dto: {}", pickingOrderDTO);
+            log.error("Failed to build PrintRequestDTO, skipping print. Order: {}", pickingOrderDTO);
             return;
         }
 
@@ -123,13 +157,19 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
         template.postForLocation(printURL, entity);
     }
 
-    private String replacePrintURL(PrintConfig config) {
-        return PRINT_URL.replace("$host", config.getHost()).replace("$port", String.valueOf(config.getPort()));
+    private String buildPrintUrl(PrintConfig config) {
+        return PRINT_URL
+                .replace("$host", config.getHost())
+                .replace("$port", String.valueOf(config.getPort()));
     }
 
+    /**
+     * Construct the print request DTO with printer name and PDF data.
+     */
     private PrintRequestDTO buildPrintRequestDTO(String printName, PickingOrderDTO pickingOrderDTO) {
         String pdfUrl = findOrderPdfUrl(pickingOrderDTO);
         if (StringUtils.isEmpty(pdfUrl)) {
+            log.warn("Cannot find pdfUrl for pickingOrder: {} on print: {}", pickingOrderDTO.getId(), printName);
             return null;
         }
 
@@ -141,58 +181,80 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
         return PrintRequestDTO.builder().printer(print).options(options).data(List.of(data)).build();
     }
 
+    /**
+     * Look up the PDF URL for the given picking order.
+     */
     private String findOrderPdfUrl(PickingOrderDTO pickingOrderDTO) {
-        List<OutboundPlanOrderDTO> outboundPlanOrderDTOS = outboundPlanOrderApi.findByWaveNos(List.of(pickingOrderDTO.getWaveNo()), false);
-        if (CollectionUtils.isEmpty(outboundPlanOrderDTOS)) {
+        List<OutboundPlanOrderDTO> outboundPlanOrders = outboundPlanOrderApi.findByWaveNos(
+                List.of(pickingOrderDTO.getWaveNo()), false);
+
+        // If no plan orders found or it is a replenish order, return null
+        if (CollectionUtils.isEmpty(outboundPlanOrders)
+                || outboundPlanOrders.stream().anyMatch(o ->
+                OutboundOrderInnerTypeEnum.REPLENISH_OUTBOUND_ORDER.name().equals(o.getCustomerOrderType()))) {
+
+            log.info("No valid outbound plan orders or is a refill order, skipping label print.");
             return null;
         }
-        if (outboundPlanOrderDTOS.stream().anyMatch(v -> OutboundOrderInnerTypeEnum.REPLENISH_OUTBOUND_ORDER.name().equals(v.getCustomerOrderType()))) {
-            log.info("This is refill order, don't need to print any label");
-            return null;
-        }
 
-        boolean isParentWave = outboundPlanOrderDTOS.stream().anyMatch(v -> v.getCustomerOrderNo().equals(v.getCustomerWaveNo()));
+        boolean isParentWave = outboundPlanOrders.stream()
+                .anyMatch(v -> v.getCustomerOrderNo().equals(v.getCustomerWaveNo()));
 
-        List<TransferContainerRecordDTO> transferContainerRecordDTOS = transferContainerApi.findByPickingOrderIds(List.of(pickingOrderDTO.getId()));
-        boolean isSplitFinished = transferContainerRecordDTOS.stream().anyMatch(v -> v.getTransferContainerStatus() == TransferContainerRecordStatusEnum.SEALED);
+        // Retrieve container records for the current picking order
+        List<TransferContainerRecordDTO> containerRecords = transferContainerApi
+                .findByPickingOrderIds(List.of(pickingOrderDTO.getId()));
 
-        PrintPluginConfig printPluginConfig = getPrintPluginConfig();
+        boolean isSplitFinished = containerRecords.stream()
+                .anyMatch(v -> v.getTransferContainerStatus()
+                        == TransferContainerRecordStatusEnum.SEALED);
+
+        // Generate the request URL for fetching PDF
+        PrintPluginConfig config = getPrintPluginConfig();
         BooleanPair pair = BooleanPair.valueOf(isParentWave, isSplitFinished);
-        String requestURL = getRequestURL(pair, outboundPlanOrderDTOS.stream().findAny().get().getCustomerWaveNo(), printPluginConfig);
-        if (StringUtils.isEmpty(requestURL)) {
-            log.warn("cannot get pdf url, picking order info: {}", pickingOrderDTO);
+        String requestUrl = resolveRequestUrl(pair, outboundPlanOrders.get(0).getCustomerWaveNo(), config);
+        if (StringUtils.isEmpty(requestUrl)) {
+            log.warn("Cannot resolve PDF URL; picking order info: {}", pickingOrderDTO);
             return null;
         }
 
         HttpHeaders headers = new HttpHeaders();
-        headers.add("Authorization", printPluginConfig.getAuthorization());
+        headers.add("Authorization", config.getAuthorization());
         headers.add("Content-Type", "application/json");
 
-        HttpEntity<String> entity = new HttpEntity<>("", headers);
+        RestTemplate restTemplate = new RestTemplate();
+        ResponseEntity<PdfUrlResponse> response = restTemplate.exchange(
+                requestUrl,
+                HttpMethod.GET,
+                new HttpEntity<>("", headers),
+                PdfUrlResponse.class
+        );
 
-        RestTemplate template = new RestTemplate();
-        ResponseEntity<PdfUrlResponse> responseEntity = template.exchange(requestURL, HttpMethod.GET, entity, PdfUrlResponse.class);
-        if (!PdfUrlResponse.STATUS_SUCCESS.equals(Objects.requireNonNull(responseEntity.getBody()).getStatus())) {
-            log.warn("MA response error, picking order id: {}, response: {}", pickingOrderDTO.getId(), responseEntity);
+        PdfUrlResponse body = response.getBody();
+        if (body == null || !PdfUrlResponse.STATUS_SUCCESS.equals(body.getStatus())) {
+            log.warn("MA service returned invalid response, order ID: {}, response: {}", pickingOrderDTO.getId(), response);
             return null;
         }
 
-        return responseEntity.getBody().getUrl();
+        return body.getUrl();
     }
 
     private PrintPluginConfig getPrintPluginConfig() {
         return TenantPluginConfig.getTenantConfig(PLUGIN_ID, PrintPluginConfig.class);
     }
 
-    private String getRequestURL(BooleanPair pair, String customerWaveNo, PrintPluginConfig printPluginConfig) {
-        String requestURL = null;
+    private String resolveRequestUrl(BooleanPair pair, String customerWaveNo, PrintPluginConfig config) {
+        String baseUrl;
         switch (pair) {
-            case TRUE_FALSE -> requestURL = printPluginConfig.getFirstLabelUrl();
-            case TRUE_TRUE -> requestURL = printPluginConfig.getSplitUrl();
-            case FALSE_TRUE -> requestURL = printPluginConfig.getAddToLabelUrl();
-            case FALSE_FALSE -> requestURL = printPluginConfig.getAddToSplitUrl();
+            case TRUE_FALSE -> baseUrl = config.getFirstLabelUrl();
+            case TRUE_TRUE -> baseUrl = config.getSplitUrl();
+            case FALSE_TRUE -> baseUrl = config.getAddToLabelUrl();
+            case FALSE_FALSE -> baseUrl = config.getAddToSplitUrl();
+            default -> {
+                log.warn("Unexpected BooleanPair: {}", pair);
+                return null;
+            }
         }
-        return Objects.requireNonNull(requestURL).replace("$customerWaveNo", customerWaveNo);
+        return Objects.requireNonNull(baseUrl).replace("$customerWaveNo", customerWaveNo);
     }
 
     @AllArgsConstructor
@@ -209,18 +271,17 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
         private boolean isParentWave;
         private boolean isSplitFinished;
 
-        /**
-         * Static factory method to get the BooleanPair instance based on two boolean values.
-         *
-         * @param first  the first boolean value
-         * @param second the second boolean value
-         * @return the corresponding BooleanPair instance
-         */
         public static BooleanPair valueOf(boolean first, boolean second) {
-            return first && second ? TRUE_TRUE :
-                first ? TRUE_FALSE :
-                    second ? FALSE_TRUE :
-                        FALSE_FALSE;
+            if (first && second) {
+                return TRUE_TRUE;
+            }
+            if (first) {
+                return TRUE_FALSE;
+            }
+            if (second) {
+                return FALSE_TRUE;
+            }
+            return FALSE_FALSE;
         }
     }
 
