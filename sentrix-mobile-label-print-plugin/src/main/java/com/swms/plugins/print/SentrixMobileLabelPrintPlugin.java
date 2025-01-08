@@ -34,9 +34,7 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 
 @Slf4j
 @Extension
@@ -98,31 +96,17 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
 
         // Retrieve config and trigger print
         PrintConfig printConfig = getWorkStationPrintConfig(workStationId);
-        triggerPrint(printConfig, pickingOrderDTO);
+        triggerPrint(printConfig, pickingOrderDTO.getWaveNo());
     }
 
     /**
      * Handle print logic for manual area (no workstation ID).
      */
     private void handleManualAreaPrint(PrintEvent event) {
-        // Attempt to fetch pickingOrderId from target arguments
-        Optional<Map<String, Object>> args = event.getTargetArgs().stream().findAny();
-        if (args.isEmpty() || !args.get().containsKey(PICKING_ORDER_ID)) {
-            log.warn("Cannot find pickingOrderId parameter in targetArgs.");
-            return;
-        }
-
-        Long pickingOrderId = Long.parseLong(args.get().get(PICKING_ORDER_ID).toString());
-        PickingOrderDTO pickingOrderDTO = pickingOrderApi.getById(pickingOrderId);
-        if (pickingOrderDTO == null) {
-            log.warn("Cannot find picking order by ID: {}", pickingOrderId);
-            return;
-        }
-
         // Retrieve config for manual area
-        String locationCode = String.valueOf(event.getParameter());
-        PrintConfig printConfig = getManualAreaPrintConfig(locationCode);
-        triggerPrint(printConfig, pickingOrderDTO);
+        String waveNo = String.valueOf(event.getParameter());
+        PrintConfig printConfig = getManualAreaPrintConfig();
+        triggerPrint(printConfig, waveNo);
     }
 
     /**
@@ -136,19 +120,19 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
     /**
      * Fetch printer config for a manual location code.
      */
-    private PrintConfig getManualAreaPrintConfig(String locationCode) {
+    private PrintConfig getManualAreaPrintConfig() {
         PrintPluginConfig tenantConfig = TenantPluginConfig.getTenantConfig(PLUGIN_ID, PrintPluginConfig.class);
-        return tenantConfig.getManualAreaPrintConfig().get(locationCode);
+        return tenantConfig.getManualAreaPrintConfig();
     }
 
     /**
      * Build a print request DTO and call the external print service.
      */
-    private void triggerPrint(PrintConfig config, PickingOrderDTO pickingOrderDTO) {
+    private void triggerPrint(PrintConfig config, String waveNo) {
         String printURL = buildPrintUrl(config);
-        PrintRequestDTO requestDTO = buildPrintRequestDTO(config.getPrintName(), pickingOrderDTO);
+        PrintRequestDTO requestDTO = buildPrintRequestDTO(config.getPrintName(), waveNo);
         if (requestDTO == null) {
-            log.error("Failed to build PrintRequestDTO, skipping print. Order: {}", pickingOrderDTO);
+            log.error("Failed to build PrintRequestDTO, skipping print. Wave NO: {}", waveNo);
             return;
         }
 
@@ -166,10 +150,10 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
     /**
      * Construct the print request DTO with printer name and PDF data.
      */
-    private PrintRequestDTO buildPrintRequestDTO(String printName, PickingOrderDTO pickingOrderDTO) {
-        String pdfUrl = findOrderPdfUrl(pickingOrderDTO);
+    private PrintRequestDTO buildPrintRequestDTO(String printName, String waveNo) {
+        String pdfUrl = findOrderPdfUrl(waveNo);
         if (StringUtils.isEmpty(pdfUrl)) {
-            log.warn("Cannot find pdfUrl for pickingOrder: {} on print: {}", pickingOrderDTO.getId(), printName);
+            log.warn("Cannot find pdfUrl for Wave NO: {} on print: {}", waveNo, printName);
             return null;
         }
 
@@ -184,9 +168,9 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
     /**
      * Look up the PDF URL for the given picking order.
      */
-    private String findOrderPdfUrl(PickingOrderDTO pickingOrderDTO) {
+    private String findOrderPdfUrl(String waveNo) {
         List<OutboundPlanOrderDTO> outboundPlanOrders = outboundPlanOrderApi.findByWaveNos(
-                List.of(pickingOrderDTO.getWaveNo()), false);
+                List.of(waveNo), false);
 
         // If no plan orders found or it is a replenish order, return null
         if (CollectionUtils.isEmpty(outboundPlanOrders)
@@ -200,9 +184,10 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
         boolean isParentWave = outboundPlanOrders.stream()
                 .anyMatch(v -> v.getCustomerOrderNo().equals(v.getCustomerWaveNo()));
 
+        List<Long> pickingOrderIds = pickingOrderApi.findPickingOrderByWaveNo(waveNo).stream()
+                .map(PickingOrderDTO::getId).toList();
         // Retrieve container records for the current picking order
-        List<TransferContainerRecordDTO> containerRecords = transferContainerApi
-                .findByPickingOrderIds(List.of(pickingOrderDTO.getId()));
+        List<TransferContainerRecordDTO> containerRecords = transferContainerApi.findByPickingOrderIds(pickingOrderIds);
 
         boolean isSplitFinished = containerRecords.stream()
                 .anyMatch(v -> v.getTransferContainerStatus()
@@ -213,7 +198,7 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
         BooleanPair pair = BooleanPair.valueOf(isParentWave, isSplitFinished);
         String requestUrl = resolveRequestUrl(pair, outboundPlanOrders.get(0).getCustomerWaveNo(), config);
         if (StringUtils.isEmpty(requestUrl)) {
-            log.warn("Cannot resolve PDF URL; picking order info: {}", pickingOrderDTO);
+            log.warn("Cannot resolve PDF URL; Wave NO: {}", waveNo);
             return null;
         }
 
@@ -231,7 +216,7 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
 
         PdfUrlResponse body = response.getBody();
         if (body == null || !PdfUrlResponse.STATUS_SUCCESS.equals(body.getStatus())) {
-            log.warn("MA service returned invalid response, order ID: {}, response: {}", pickingOrderDTO.getId(), response);
+            log.warn("MA service returned invalid response, Wave NO: {}, response: {}", waveNo, response);
             return null;
         }
 

@@ -15,5 +15,5 @@ public class PrintPluginConfig {
 
     private Map<String, PrintConfig> stationPrintConfig;
 
-    private Map<String, PrintConfig> manualAreaPrintConfig;
+    private PrintConfig manualAreaPrintConfig;
 }
