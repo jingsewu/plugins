@@ -14,6 +14,4 @@ public class PrintPluginConfig {
     private String addToSplitUrl;
 
     private Map<String, PrintConfig> stationPrintConfig;
-
-    private PrintConfig manualAreaPrintConfig;
 }

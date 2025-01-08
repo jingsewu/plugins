@@ -57,11 +57,12 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
         log.info("Received print event: {}", event);
 
         Long workStationId = event.getWorkStationId();
-        if (workStationId != null) {
-            handleWorkStationPrint(workStationId, event);
-        } else {
-            handleManualAreaPrint(event);
+        if (workStationId == null) {
+            log.warn("Work station id is null， event: {}", event);
+            return null;
         }
+
+        handleWorkStationPrint(workStationId, event);
         return null;
     }
 
@@ -70,11 +71,17 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
      */
     private void handleWorkStationPrint(Long workStationId, PrintEvent event) {
         String parameter = String.valueOf(event.getParameter());
-        PutWallSlotDTO putWallSlot = putWallApi.getPutWallSlot(parameter, workStationId);
+        String waveNo = transferToWaveNo(parameter, workStationId);
 
+        // Retrieve config and trigger print
+        PrintConfig printConfig = getWorkStationPrintConfig(workStationId);
+        triggerPrint(printConfig, waveNo);
+    }
+
+    private String transferToWaveNo(String parameter, Long workStationId) {
+        PutWallSlotDTO putWallSlot = putWallApi.getPutWallSlot(parameter, workStationId);
         if (putWallSlot == null) {
-            log.warn("Cannot find PutWallSlot for workstation ID: {}, parameter: {}", workStationId, parameter);
-            return;
+            return parameter;
         }
 
         // Check slot status and picking order
@@ -83,7 +90,7 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
 
             log.warn("PutWallSlot not bound or picking order is null, station: {}, slot code: {}, status: {}",
                     workStationId, putWallSlot.getPutWallSlotCode(), putWallSlot.getPutWallSlotStatus());
-            return;
+            return null;
         }
 
         PickingOrderDTO pickingOrderDTO = pickingOrderApi.getById(putWallSlot.getPickingOrderId());
@@ -91,22 +98,10 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
                 || PickingOrderStatusEnum.isFinalStatues(pickingOrderDTO.getPickingOrderStatus())) {
 
             log.warn("Picking order is null or already finished, order ID: {}", putWallSlot.getPickingOrderId());
-            return;
+            return null;
         }
 
-        // Retrieve config and trigger print
-        PrintConfig printConfig = getWorkStationPrintConfig(workStationId);
-        triggerPrint(printConfig, pickingOrderDTO.getWaveNo());
-    }
-
-    /**
-     * Handle print logic for manual area (no workstation ID).
-     */
-    private void handleManualAreaPrint(PrintEvent event) {
-        // Retrieve config for manual area
-        String waveNo = String.valueOf(event.getParameter());
-        PrintConfig printConfig = getManualAreaPrintConfig();
-        triggerPrint(printConfig, waveNo);
+        return pickingOrderDTO.getWaveNo();
     }
 
     /**
@@ -115,14 +110,6 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
     private PrintConfig getWorkStationPrintConfig(Long workStationId) {
         PrintPluginConfig tenantConfig = TenantPluginConfig.getTenantConfig(PLUGIN_ID, PrintPluginConfig.class);
         return tenantConfig.getStationPrintConfig().get(String.valueOf(workStationId));
-    }
-
-    /**
-     * Fetch printer config for a manual location code.
-     */
-    private PrintConfig getManualAreaPrintConfig() {
-        PrintPluginConfig tenantConfig = TenantPluginConfig.getTenantConfig(PLUGIN_ID, PrintPluginConfig.class);
-        return tenantConfig.getManualAreaPrintConfig();
     }
 
     /**
