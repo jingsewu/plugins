@@ -41,6 +41,8 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
 
+    private static final String OUTBOUND_WAVE_NO_PREFIX = "WAVE_";
+
     private static final String PLUGIN_ID = "Sentrix-Mobile-Label-Print-Plugin-0.0.1";
     private static final String PRINT_URL = "http://$host:$port/print";
 
@@ -73,17 +75,22 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
         String parameter = String.valueOf(event.getParameter());
         String waveNo = transferToWaveNo(parameter, workStationId);
 
+        if (StringUtils.isEmpty(waveNo)) {
+            log.warn("Cannot find wave no, event id: {}", event.getEventId());
+            return;
+        }
+
         // Retrieve config and trigger print
         PrintConfig printConfig = getWorkStationPrintConfig(workStationId);
         triggerPrint(printConfig, waveNo);
     }
 
     private String transferToWaveNo(String parameter, Long workStationId) {
-        PutWallSlotDTO putWallSlot = putWallApi.getPutWallSlot(parameter, workStationId);
-        if (putWallSlot == null) {
+        if (StringUtils.startsWith(parameter, OUTBOUND_WAVE_NO_PREFIX)) {
             return parameter;
         }
 
+        PutWallSlotDTO putWallSlot = putWallApi.getPutWallSlot(parameter, workStationId);
         // Check slot status and picking order
         if (PutWallSlotStatusEnum.BOUND.equals(putWallSlot.getPutWallSlotStatus())
                 || putWallSlot.getPickingOrderId() == null) {
