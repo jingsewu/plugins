@@ -14,8 +14,11 @@ import com.swms.wms.api.outbound.IOutboundPlanOrderApi;
 import com.swms.wms.api.outbound.IPickingOrderApi;
 import com.swms.wms.api.outbound.constants.OutboundOrderInnerTypeEnum;
 import com.swms.wms.api.outbound.constants.PickingOrderStatusEnum;
+import com.swms.wms.api.outbound.dto.OutboundCustomLabelDTO;
 import com.swms.wms.api.outbound.dto.OutboundPlanOrderDTO;
 import com.swms.wms.api.outbound.dto.PickingOrderDTO;
+import com.swms.wms.api.printer.constants.LabelTypeEnum;
+import com.swms.wms.api.printer.constants.PrintNodeEnum;
 import com.swms.wms.api.printer.event.PrintEvent;
 import com.swms.wms.api.task.ITransferContainerApi;
 import com.swms.wms.api.task.constants.TransferContainerRecordStatusEnum;
@@ -34,6 +37,7 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @Slf4j
@@ -72,17 +76,37 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
      * Handle print logic when a workstation ID is available.
      */
     private void handleWorkStationPrint(Long workStationId, PrintEvent event) {
-        String parameter = String.valueOf(event.getParameter());
-        String waveNo = transferToWaveNo(parameter, workStationId);
 
-        if (StringUtils.isEmpty(waveNo)) {
-            log.warn("Cannot find wave no, event id: {}", event.getEventId());
+        if (LabelTypeEnum.SKU == event.getLabelType()) {
+            // Retrieve config and trigger print
+            PrintConfig printConfig = getWorkStationPrintConfig(workStationId, LabelTypeEnum.SKU);
+            if (printConfig == null) {
+                return;
+            }
+
+            List<OutboundCustomLabelDTO> customLabelDTOS = (List<OutboundCustomLabelDTO>) event.getParameter();
+            triggerSkuLabelPrint(printConfig, customLabelDTOS);
+        } else {
+            String parameter = String.valueOf(event.getParameter());
+            String waveNo = transferToWaveNo(parameter, workStationId);
+
+            if (StringUtils.isEmpty(waveNo)) {
+                log.warn("Cannot find wave no, event id: {}", event.getEventId());
+                return;
+            }
+
+            // Retrieve config and trigger print
+            triggerPrintLabelByWaveNo(waveNo, event);
+        }
+    }
+
+    private void triggerSkuLabelPrint(PrintConfig config, List<OutboundCustomLabelDTO> customLabelDTOS) {
+        if (CollectionUtils.isEmpty(customLabelDTOS)) {
+            log.warn("CustomLabels is empty");
             return;
         }
 
-        // Retrieve config and trigger print
-        PrintConfig printConfig = getWorkStationPrintConfig(workStationId);
-        triggerPrint(printConfig, waveNo);
+        customLabelDTOS.forEach(labelDTO -> triggerPrint(config, labelDTO.getUrl()));
     }
 
     private String transferToWaveNo(String parameter, Long workStationId) {
@@ -114,25 +138,72 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
     /**
      * Fetch printer config for a given workstation ID.
      */
-    private PrintConfig getWorkStationPrintConfig(Long workStationId) {
+    private PrintConfig getWorkStationPrintConfig(Long workStationId, LabelTypeEnum labelType) {
         PrintPluginConfig tenantConfig = TenantPluginConfig.getTenantConfig(PLUGIN_ID, PrintPluginConfig.class);
-        return tenantConfig.getStationPrintConfig().get(String.valueOf(workStationId));
+        Map<LabelTypeEnum, PrintConfig> labelTypePrintConfigMap = tenantConfig.getStationPrintConfig().get(String.valueOf(workStationId));
+        if (labelTypePrintConfigMap == null || labelTypePrintConfigMap.size() == 0) {
+            log.warn("Cannot find print config for work station: {}", workStationId);
+            return null;
+        }
+        PrintConfig printConfig = labelTypePrintConfigMap.get(labelType);
+        if (printConfig == null) {
+            log.warn("Cannot find print config for station {} label type: {}", workStationId, labelType);
+            return null;
+        }
+        return printConfig;
     }
 
     /**
      * Build a print request DTO and call the external print service.
      */
-    private void triggerPrint(PrintConfig config, String waveNo) {
-        String printURL = buildPrintUrl(config);
-        PrintRequestDTO requestDTO = buildPrintRequestDTO(config.getPrintName(), waveNo);
-        if (requestDTO == null) {
-            log.error("Failed to build PrintRequestDTO, skipping print. Wave NO: {}", waveNo);
+    private void triggerPrintLabelByWaveNo(String waveNo, PrintEvent event) {
+        if (PrintNodeEnum.PRINT_NODE_CLICK_REPRINT == event.getPrintNode()) {
+            reprint(waveNo, event);
             return;
         }
 
-        RestTemplate template = new RestTemplate();
-        HttpEntity<String> entity = new HttpEntity<>(JsonUtils.obj2String(requestDTO));
-        template.postForLocation(printURL, entity);
+        // 打印快递 label
+        String labelPdfUrl = findOrderPdfUrl(waveNo);
+        if (StringUtils.isNotEmpty(labelPdfUrl)) {
+            PrintConfig printConfig = getWorkStationPrintConfig(event.getWorkStationId(), LabelTypeEnum.LABEL);
+            if (printConfig == null) {
+                return;
+            }
+            triggerPrint(printConfig, labelPdfUrl);
+        }
+
+        // 打印 a4 paper
+        String a4PaperUrl = findA4PaperUrl(waveNo);
+        if (StringUtils.isNotEmpty(a4PaperUrl)) {
+            PrintConfig printConfig = getWorkStationPrintConfig(event.getWorkStationId(), LabelTypeEnum.A4PAPER);
+            if (printConfig == null) {
+                return;
+            }
+            triggerPrint(printConfig, a4PaperUrl);
+        }
+        log.info("Print label and a4paper for Wave NO: {}", waveNo);
+    }
+
+    private void reprint(String waveNo, PrintEvent event) {
+        // Retrieve config and trigger print
+        PrintConfig printConfig = getWorkStationPrintConfig(event.getWorkStationId(), event.getLabelType());
+        if (printConfig == null) {
+            return;
+        }
+        String pdfUrl;
+        if (LabelTypeEnum.LABEL == event.getLabelType()) {
+            pdfUrl = findOrderPdfUrl(waveNo);
+        } else {
+            pdfUrl = findA4PaperUrl(waveNo);
+        }
+
+        if (StringUtils.isEmpty(pdfUrl)) {
+            log.warn("Cannot find pdfUrl for Wave NO: {} for printer: {}", waveNo, printConfig.getPrintName());
+            return;
+        }
+        triggerPrint(printConfig, pdfUrl);
+
+        log.info("Reprint label for Wave NO: {}, label type: {}", waveNo, event.getLabelType());
     }
 
     private String buildPrintUrl(PrintConfig config) {
@@ -141,16 +212,24 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
                 .replace("$port", String.valueOf(config.getPort()));
     }
 
+    private void triggerPrint(PrintConfig config, String pdfUrl) {
+        String printURL = buildPrintUrl(config);
+
+        PrintRequestDTO requestDTO = buildPrintRequestDTO(config.getPrintName(), pdfUrl);
+        if (requestDTO == null) {
+            log.error("Failed to build PrintRequestDTO, skipping print. pdf url: {}", pdfUrl);
+            return;
+        }
+
+        RestTemplate template = new RestTemplate();
+        HttpEntity<String> entity = new HttpEntity<>(JsonUtils.obj2String(requestDTO));
+        template.postForLocation(printURL, entity);
+    }
+
     /**
      * Construct the print request DTO with printer name and PDF data.
      */
-    private PrintRequestDTO buildPrintRequestDTO(String printName, String waveNo) {
-        String pdfUrl = findOrderPdfUrl(waveNo);
-        if (StringUtils.isEmpty(pdfUrl)) {
-            log.warn("Cannot find pdfUrl for Wave NO: {} on print: {}", waveNo, printName);
-            return null;
-        }
-
+    private PrintRequestDTO buildPrintRequestDTO(String printName, String pdfUrl) {
         PrintRequestDTO.Printer print = PrintRequestDTO.Printer.builder().name(printName).build();
         PrintRequestDTO.Options options = PrintRequestDTO.Options.builder().build();
 
@@ -215,6 +294,19 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
         }
 
         return body.getUrl();
+    }
+
+    private String findA4PaperUrl(String waveNo) {
+        List<OutboundPlanOrderDTO> outboundPlanOrderDTOS = outboundPlanOrderApi.findByWaveNos(List.of(waveNo), false);
+        if (CollectionUtils.isEmpty(outboundPlanOrderDTOS)) {
+            log.warn("Cannot find outbound order for wave no: {}", waveNo);
+            return null;
+        }
+
+        return outboundPlanOrderDTOS.stream()
+                .map(OutboundPlanOrderDTO::getA4Paper)
+                .filter(StringUtils::isNotEmpty)
+                .findFirst().orElse(null);
     }
 
     private PrintPluginConfig getPrintPluginConfig() {
