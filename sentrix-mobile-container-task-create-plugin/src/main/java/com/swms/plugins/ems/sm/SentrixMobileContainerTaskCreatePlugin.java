@@ -151,7 +151,11 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                 -> task.getRelations().stream()
                 // 排除已经取消或完成的 relation
                 .filter(r -> operationTaskDTOMap.containsKey(r.getCustomerTaskId()))
-                .map(r -> outboundWaveDTOMap.get(pickingOrderDTOMap.get(operationTaskDTOMap.get(r.getCustomerTaskId()).getOrderId()).getWaveNo()).getPriority()), Collectors.maxBy(Integer::compareTo))));
+                .map(r -> {
+                    int wavePriority = outboundWaveDTOMap.get(pickingOrderDTOMap.get(operationTaskDTOMap.get(r.getCustomerTaskId()).getOrderId()).getWaveNo()).getPriority();
+                    Integer taskPriority = operationTaskDTOMap.get(r.getCustomerTaskId()).getPriority();
+                    return Math.max(wavePriority, taskPriority);
+                }), Collectors.maxBy(Integer::compareTo))));
 
         Set<String> containerCodes = allDestinationContainerTasks.stream().map(ContainerTaskDTO::getContainerCode).collect(Collectors.toSet());
         List<LocationDTO> locationDTOS = locationApi.getByShelfCodes(containerCodes, warehouseCode);
