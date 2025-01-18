@@ -278,14 +278,31 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                 if (!CollectionUtils.isEmpty(noPriorityTasks)) {
                     AtomicInteger priority = new AtomicInteger(1000);
                     Map<Pair<String, String>, Integer> containerPriorityMap = new HashMap<>();
-                    noPriorityTasks.forEach(task -> {
+
+                    Iterator<ContainerTaskDTO> iterator = noPriorityTasks.iterator();
+                    while (iterator.hasNext()) {
+                        int currentPriority = priority.decrementAndGet();
+
+                        // 跳过 997，留给最后一个任务，避免尾波时间太长
+                        if (currentPriority == 997) {
+                            currentPriority = priority.decrementAndGet();
+                        }
+
+                        ContainerTaskDTO task = iterator.next();
                         Pair<String, String> key = Pair.of(task.getContainerCode(), task.getContainerFace());
-                        Integer taskPriority = containerPriorityMap.computeIfAbsent(key, v -> Math.max(priority.decrementAndGet(), 1));
+
+                        int finalCurrentPriority = currentPriority;
+                        Integer taskPriority = containerPriorityMap.computeIfAbsent(key, v -> Math.max(finalCurrentPriority, 1));
                         if (!Objects.equals(task.getTaskPriority(), taskPriority)) {
                             task.setTaskPriority(taskPriority);
                             priorityChangedTasks.add(task);
                         }
-                    });
+
+                        // 如果没有下一个，就把优先级提高到 997
+                        if (!iterator.hasNext()) {
+                            task.setTaskPriority(997);
+                        }
+                    }
                 }
             });
         stopWatch.stop();
