@@ -141,7 +141,7 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
     private PrintConfig getWorkStationPrintConfig(Long workStationId, LabelTypeEnum labelType) {
         PrintPluginConfig tenantConfig = TenantPluginConfig.getTenantConfig(PLUGIN_ID, PrintPluginConfig.class);
         Map<LabelTypeEnum, PrintConfig> labelTypePrintConfigMap = tenantConfig.getStationPrintConfig().get(String.valueOf(workStationId));
-        if (labelTypePrintConfigMap == null || labelTypePrintConfigMap.size() == 0) {
+        if (labelTypePrintConfigMap == null || labelTypePrintConfigMap.isEmpty()) {
             log.warn("Cannot find print config for work station: {}", workStationId);
             return null;
         }
@@ -242,6 +242,9 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
      * Look up the PDF URL for the given picking order.
      */
     private String findOrderPdfUrl(String waveNo) {
+        if (1 == 1) {
+            return "http://192.168.21.2:8000/fff.pdf";
+        }
         List<OutboundPlanOrderDTO> outboundPlanOrders = outboundPlanOrderApi.findByWaveNos(
                 List.of(waveNo), false);
 
@@ -297,6 +300,12 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
     }
 
     private String findA4PaperUrl(String waveNo) {
+        boolean hasA4PdfUrl = transferContainerApi.assertWaveHasA4PdfUrl(waveNo);
+        if (!hasA4PdfUrl) {
+            log.info("No A4Paper found for Wave NO: {}", waveNo);
+            return null;
+        }
+
         List<OutboundPlanOrderDTO> outboundPlanOrderDTOS = outboundPlanOrderApi.findByWaveNos(List.of(waveNo), false);
         if (CollectionUtils.isEmpty(outboundPlanOrderDTOS)) {
             log.warn("Cannot find outbound order for wave no: {}", waveNo);
