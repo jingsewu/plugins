@@ -50,8 +50,6 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
     private static final String PLUGIN_ID = "Sentrix-Mobile-Label-Print-Plugin-0.0.1";
     private static final String PRINT_URL = "http://$host:$port/print";
 
-    private static final String PICKING_ORDER_ID = "pickingOrderId";
-
     private final IPutWallApi putWallApi;
     private final IPickingOrderApi pickingOrderApi;
     private final IOutboundPlanOrderApi outboundPlanOrderApi;
