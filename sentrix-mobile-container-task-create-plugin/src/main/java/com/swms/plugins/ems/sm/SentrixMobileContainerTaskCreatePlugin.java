@@ -283,12 +283,15 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                     while (iterator.hasNext()) {
                         int currentPriority = priority.decrementAndGet();
 
+                        ContainerTaskDTO task = iterator.next();
+
                         // 跳过 997，留给最后一个任务，避免尾波时间太长
-                        if (currentPriority == 997) {
+                        if (currentPriority == 997 && iterator.hasNext()) {
                             currentPriority = priority.decrementAndGet();
+                        } else if (!iterator.hasNext()) {
+                            currentPriority = 997;
                         }
 
-                        ContainerTaskDTO task = iterator.next();
                         Pair<String, String> key = Pair.of(task.getContainerCode(), task.getContainerFace());
 
                         int finalCurrentPriority = currentPriority;
@@ -296,11 +299,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                         if (!Objects.equals(task.getTaskPriority(), taskPriority)) {
                             task.setTaskPriority(taskPriority);
                             priorityChangedTasks.add(task);
-                        }
-
-                        // 如果没有下一个，就把优先级提高到 997
-                        if (!iterator.hasNext()) {
-                            task.setTaskPriority(997);
+                            priority.set(taskPriority);
                         }
                     }
                 }
