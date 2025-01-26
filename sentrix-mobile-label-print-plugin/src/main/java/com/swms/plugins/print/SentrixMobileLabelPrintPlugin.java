@@ -240,9 +240,6 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
      * Look up the PDF URL for the given picking order.
      */
     private String findOrderPdfUrl(String waveNo) {
-        if (1 == 1) {
-            return "http://192.168.21.2:8000/fff.pdf";
-        }
         List<OutboundPlanOrderDTO> outboundPlanOrders = outboundPlanOrderApi.findByWaveNos(
                 List.of(waveNo), false);
 
@@ -325,8 +322,8 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
         switch (pair) {
             case TRUE_FALSE -> baseUrl = config.getFirstLabelUrl();
             case TRUE_TRUE -> baseUrl = config.getSplitUrl();
-            case FALSE_TRUE -> baseUrl = config.getAddToLabelUrl();
-            case FALSE_FALSE -> baseUrl = config.getAddToSplitUrl();
+            case FALSE_TRUE -> baseUrl = config.getAddToSplitUrl();
+            case FALSE_FALSE -> baseUrl = config.getAddToLabelUrl();
             default -> {
                 log.warn("Unexpected BooleanPair: {}", pair);
                 return null;
