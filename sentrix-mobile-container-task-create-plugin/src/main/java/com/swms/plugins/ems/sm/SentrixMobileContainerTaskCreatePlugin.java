@@ -28,7 +28,6 @@ import com.swms.wms.api.task.constants.OperationTaskStatusEnum;
 import com.swms.wms.api.task.dto.OperationTaskDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.tuple.Pair;
 import org.pf4j.Extension;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StopWatch;
@@ -64,7 +63,17 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
             return;
         }
 
-        resortContainerTasks(containerTasks, containerTaskType, newCustomerTaskIds);
+        Map<ContainerTaskTypeEnum, List<ContainerTaskDTO>> containerTaskMap = containerTasks.stream()
+                .collect(Collectors.groupingBy(ContainerTaskDTO::getContainerTaskType));
+        List<ContainerTaskDTO> transferContainerTasks = containerTaskMap.get(ContainerTaskTypeEnum.TRANSFER);
+        if (!CollectionUtils.isEmpty(transferContainerTasks)) {
+            transferContainerTasks.forEach(task -> callback(task, containerTaskType, newCustomerTaskIds));
+        }
+
+        List<ContainerTaskDTO> robotContainerTasks = containerTaskMap.get(ContainerTaskTypeEnum.OUTBOUND);
+        if (!CollectionUtils.isEmpty(robotContainerTasks)) {
+            resortContainerTasks(robotContainerTasks, containerTaskType, newCustomerTaskIds);
+        }
     }
 
     @Override
@@ -277,29 +286,31 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
                 if (!CollectionUtils.isEmpty(noPriorityTasks)) {
                     AtomicInteger priority = new AtomicInteger(1000);
-                    Map<Pair<String, String>, Integer> containerPriorityMap = new HashMap<>();
 
                     Iterator<ContainerTaskDTO> iterator = noPriorityTasks.iterator();
-                    while (iterator.hasNext()) {
-                        int currentPriority = priority.decrementAndGet();
 
+                    int currentPriority = 0;
+                    String lastContainerCode = null;
+                    while (iterator.hasNext()) {
                         ContainerTaskDTO task = iterator.next();
+
+                        if (!Objects.equals(lastContainerCode, task.getContainerCode())) {
+                            lastContainerCode = task.getContainerCode();
+                            currentPriority = priority.decrementAndGet();
+                        }
 
                         // 跳过 997，留给最后一个任务，避免尾波时间太长
                         if (currentPriority == 997 && iterator.hasNext()) {
                             currentPriority = priority.decrementAndGet();
-                        } else if (!iterator.hasNext()) {
-                            currentPriority = 997;
                         }
 
-                        Pair<String, String> key = Pair.of(task.getContainerCode(), task.getContainerFace());
-
-                        int finalCurrentPriority = currentPriority;
-                        Integer taskPriority = containerPriorityMap.computeIfAbsent(key, v -> Math.max(finalCurrentPriority, 1));
-                        if (!Objects.equals(task.getTaskPriority(), taskPriority)) {
-                            task.setTaskPriority(taskPriority);
+                        if (task.getTaskPriority() != currentPriority) {
+                            task.setTaskPriority(currentPriority);
                             priorityChangedTasks.add(task);
-                            priority.set(taskPriority);
+                        }
+                        if (!iterator.hasNext() && currentPriority < 997 && task.getTaskPriority() != 997) {
+                            task.setTaskPriority(997);
+                            priorityChangedTasks.add(task);
                         }
                     }
                 }
