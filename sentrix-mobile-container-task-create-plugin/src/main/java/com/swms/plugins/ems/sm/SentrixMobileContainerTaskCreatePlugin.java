@@ -291,8 +291,12 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
                     int currentPriority = 0;
                     String lastContainerCode = null;
+
+                    // 标记是否添加过，避免 997 的任务重复添加
+                    boolean addedFlag;
                     while (iterator.hasNext()) {
                         ContainerTaskDTO task = iterator.next();
+                        addedFlag = false;
 
                         if (!Objects.equals(lastContainerCode, task.getContainerCode())) {
                             lastContainerCode = task.getContainerCode();
@@ -307,10 +311,13 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                         if (task.getTaskPriority() != currentPriority) {
                             task.setTaskPriority(currentPriority);
                             priorityChangedTasks.add(task);
+                            addedFlag = true;
                         }
                         if (!iterator.hasNext() && currentPriority < 997 && task.getTaskPriority() != 997) {
                             task.setTaskPriority(997);
-                            priorityChangedTasks.add(task);
+                            if (!addedFlag) {
+                                priorityChangedTasks.add(task);
+                            }
                         }
                     }
                 }
