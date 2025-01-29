@@ -264,14 +264,18 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
                 .anyMatch(v -> v.getTransferContainerStatus()
                         == TransferContainerRecordStatusEnum.SEALED);
 
+        String customerWaveNo = outboundPlanOrders.get(0).getCustomerWaveNo();
+
         // Generate the request URL for fetching PDF
         PrintPluginConfig config = getPrintPluginConfig();
         BooleanPair pair = BooleanPair.valueOf(isParentWave, isSplitFinished);
-        String requestUrl = resolveRequestUrl(pair, outboundPlanOrders.get(0).getCustomerWaveNo(), config);
+        String requestUrl = resolveRequestUrl(pair, customerWaveNo, config);
         if (StringUtils.isEmpty(requestUrl)) {
             log.warn("Cannot resolve PDF URL; Wave NO: {}", waveNo);
             return null;
         }
+
+        log.debug("try get pdf url for wave no: {}, customer wave no: {}", waveNo, customerWaveNo);
 
         HttpHeaders headers = new HttpHeaders();
         headers.add("Authorization", config.getAuthorization());
@@ -290,6 +294,8 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
             log.warn("MA service returned invalid response, Wave NO: {}, response: {}", waveNo, response);
             return null;
         }
+
+        log.debug("successful get label pdf url, wave no : {}, customer wave no : {} : {}", waveNo, customerWaveNo, body.getUrl());
 
         return body.getUrl();
     }
