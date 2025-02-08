@@ -1,8 +1,6 @@
 package com.swms.plugins.outbound.sm;
 
-import com.swms.common.utils.utils.DateFormatUtil;
 import com.swms.domain.event.DomainEventPublisher;
-import com.swms.mdm.api.config.constants.ParserObjectEnum;
 import com.swms.mdm.api.main.data.ISkuMainDataApi;
 import com.swms.mdm.api.main.data.dto.BarcodeDTO;
 import com.swms.mdm.api.main.data.dto.SkuMainDataDTO;
@@ -12,9 +10,11 @@ import com.swms.wms.api.basic.IContainerApi;
 import com.swms.wms.api.basic.dto.ContainerDTO;
 import com.swms.wms.api.outbound.dto.OutboundPlanOrderDTO;
 import com.swms.wms.api.stock.ISkuBatchAttributeApi;
+import com.swms.wms.api.stock.constants.StockOperateSourceEnum;
 import com.swms.wms.api.stock.dto.SkuBatchAttributeDTO;
 import com.swms.wms.api.stock.dto.StockCreateDTO;
 import com.swms.wms.api.stock.event.StockCreateEvent;
+import com.swms.wms.api.task.constants.OperationTaskTypeEnum;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -22,11 +22,7 @@ import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.pf4j.Extension;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 @Slf4j
 @Extension
@@ -36,9 +32,6 @@ public class SentrixMobileBinCodeOutboundPlanOrderCreatePlugin implements IOutbo
     // 人工区 8 区格口位置字段
     private static final String BIN_CODE = "binCode";
     private static final String BAR_CODE = "barcode";
-
-    private static final String TARGET_CONTAINER_FACE = "F";
-    private static final String TARGET_CONTAINER_SLOT = "A1";
 
     private final ISkuMainDataApi skuMainDataApi;
 
@@ -111,10 +104,10 @@ public class SentrixMobileBinCodeOutboundPlanOrderCreatePlugin implements IOutbo
 
             // 批次属性
             Map<String, Object> batchAttribute = new HashMap<>();
-            batchAttribute.put(ParserObjectEnum.INBOUND_DATE.getLabel(), DateFormatUtil.getDateFormatYmdNowWithoutLink());
+//            batchAttribute.put(ParserObjectEnum.INBOUND_DATE.getLabel(), DateFormatUtil.getDateFormatYmdNowWithoutLink());
 
             SkuBatchAttributeDTO skuBatchAttribute = skuBatchAttributeApi.getOrCreateSkuBatchAttribute(skuMainData.getId(), batchAttribute);
-            ContainerDTO containerDTO = containerApi.queryContainer(binCode, operationObject.getWarehouseCode());
+            ContainerDTO containerDTO = containerApi.queryContainer(binCode, binCode, operationObject.getWarehouseCode());
 
             StockCreateDTO.StockCreateDTOBuilder stockCreateDTOBuilder = StockCreateDTO.builder();
             stockCreateDTOBuilder.warehouseCode(operationObject.getWarehouseCode());
@@ -127,14 +120,17 @@ public class SentrixMobileBinCodeOutboundPlanOrderCreatePlugin implements IOutbo
             stockCreateDTOBuilder.sourceContainerSlotCode(ownerCode);
             stockCreateDTOBuilder.targetContainerId(containerDTO.getId());
             stockCreateDTOBuilder.targetContainerCode(binCode);
-            stockCreateDTOBuilder.targetContainerFace(TARGET_CONTAINER_FACE);
-            stockCreateDTOBuilder.targetContainerSlotCode(TARGET_CONTAINER_SLOT);
+            stockCreateDTOBuilder.targetContainerFace(containerDTO.getFace());
+            stockCreateDTOBuilder.targetContainerSlotCode(containerDTO.getContainerSlotCode());
             stockCreateDTOBuilder.boxNo(operationObject.getCustomerOrderNo());
+            stockCreateDTOBuilder.lastPutAwayTime(Calendar.getInstance().getTimeInMillis());
             stockCreateDTOBuilder.boxStock(false);
+            stockCreateDTOBuilder.operationTaskType(OperationTaskTypeEnum.ADJUST);
+            stockCreateDTOBuilder.operateSource(StockOperateSourceEnum.OUTSIDE);
 
             StockCreateDTO stockCreateDTO = stockCreateDTOBuilder.build();
 
-            DomainEventPublisher.sendAsyncDomainEvent(new StockCreateEvent(stockCreateDTO));
+            DomainEventPublisher.directSendSyncEvent(new StockCreateEvent(stockCreateDTO));
         });
     }
 
