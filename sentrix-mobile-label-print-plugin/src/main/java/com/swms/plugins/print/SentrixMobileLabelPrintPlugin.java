@@ -38,7 +38,6 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 @Slf4j
 @Extension
@@ -264,18 +263,20 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
                 .anyMatch(v -> v.getTransferContainerStatus()
                         == TransferContainerRecordStatusEnum.SEALED);
 
-        String customerWaveNo = outboundPlanOrders.get(0).getCustomerWaveNo();
+        OutboundPlanOrderDTO outboundPlanOrderDTO = outboundPlanOrders.get(0);
+        String customerWaveNo = outboundPlanOrderDTO.getCustomerWaveNo();
+        String customerOrderNo = outboundPlanOrderDTO.getCustomerOrderNo();
 
         // Generate the request URL for fetching PDF
         PrintPluginConfig config = getPrintPluginConfig();
         BooleanPair pair = BooleanPair.valueOf(isParentWave, isSplitFinished);
-        String requestUrl = resolveRequestUrl(pair, customerWaveNo, config);
+        String requestUrl = resolveRequestUrl(pair, customerWaveNo, customerOrderNo, config);
         if (StringUtils.isEmpty(requestUrl)) {
             log.warn("Cannot resolve PDF URL; Wave NO: {}", waveNo);
             return null;
         }
 
-        log.debug("try get pdf url for wave no: {}, customer wave no: {}", waveNo, customerWaveNo);
+        log.debug("try get pdf url for wave no: {}, customer wave no: {}, requestUrl", waveNo, customerWaveNo);
 
         HttpHeaders headers = new HttpHeaders();
         headers.add("Authorization", config.getAuthorization());
@@ -323,19 +324,13 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
         return TenantPluginConfig.getTenantConfig(PLUGIN_ID, PrintPluginConfig.class);
     }
 
-    private String resolveRequestUrl(BooleanPair pair, String customerWaveNo, PrintPluginConfig config) {
-        String baseUrl;
-        switch (pair) {
-            case TRUE_FALSE -> baseUrl = config.getFirstLabelUrl();
-            case TRUE_TRUE -> baseUrl = config.getSplitUrl();
-            case FALSE_TRUE -> baseUrl = config.getAddToSplitUrl();
-            case FALSE_FALSE -> baseUrl = config.getAddToLabelUrl();
-            default -> {
-                log.warn("Unexpected BooleanPair: {}", pair);
-                return null;
-            }
-        }
-        return Objects.requireNonNull(baseUrl).replace("$customerWaveNo", customerWaveNo);
+    private String resolveRequestUrl(BooleanPair pair, String customerWaveNo, String customerOrderNo, PrintPluginConfig config) {
+        return switch (pair) {
+            case TRUE_FALSE -> config.getFirstLabelUrl().replace("$customerWaveNo", customerWaveNo);
+            case TRUE_TRUE -> config.getSplitUrl().replace("$customerWaveNo", customerWaveNo);
+            case FALSE_TRUE -> config.getAddToSplitUrl().replace("$customerOrderNo", customerOrderNo);
+            case FALSE_FALSE -> config.getAddToLabelUrl().replace("$customerOrderNo", customerOrderNo);
+        };
     }
 
     @AllArgsConstructor
