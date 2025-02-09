@@ -80,8 +80,7 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
             if (printConfig == null) {
                 return;
             }
-
-            List<OutboundCustomLabelDTO> customLabelDTOS = (List<OutboundCustomLabelDTO>) event.getParameter();
+            List<OutboundCustomLabelDTO> customLabelDTOS = JsonUtils.string2List(JsonUtils.obj2String(event.getParameter()), OutboundCustomLabelDTO.class);
             triggerSkuLabelPrint(printConfig, customLabelDTOS);
         } else {
             String parameter = String.valueOf(event.getParameter());
