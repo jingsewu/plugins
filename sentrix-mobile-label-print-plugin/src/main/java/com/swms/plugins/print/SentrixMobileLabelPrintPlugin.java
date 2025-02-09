@@ -276,7 +276,7 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
             return null;
         }
 
-        log.debug("try get pdf url for wave no: {}, customer wave no: {}, requestUrl", waveNo, customerWaveNo);
+        log.debug("try get pdf url for wave no: {}, customer wave no: {}, requestUrl: {}", waveNo, customerWaveNo, requestUrl);
 
         HttpHeaders headers = new HttpHeaders();
         headers.add("Authorization", config.getAuthorization());
@@ -290,7 +290,10 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
                 PdfUrlResponse.class
         );
 
+
         PdfUrlResponse body = response.getBody();
+
+
         if (body == null || !PdfUrlResponse.STATUS_SUCCESS.equals(body.getStatus())) {
             log.warn("MA service returned invalid response, Wave NO: {}, response: {}", waveNo, response);
             return null;
