@@ -19,7 +19,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.MapUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.commons.lang3.tuple.Triple;
 import org.pf4j.Extension;
 
 import java.util.*;
@@ -48,11 +50,11 @@ public class SentrixMobileBinCodeOutboundPlanOrderCreatePlugin implements IOutbo
             return;
         }
 
-        // ownerCode >>> barcode
-        Map<String, Set<String>> barcodeGroupByOwnerCodeMap = new HashMap<>();
+        // ownerCode + binCode + barCode >>> barcode
+        Map<Triple<String, String, String>, String> barcodeGroupByOwnerCodeMap = new HashMap<>();
 
-        // ownerCode + binCode >>> qty
-        Map<Pair<String, String>, Integer> echoOwnerSkuBinQtyMap = new HashMap<>();
+        // ownerCode + binCode + barCode >>> qty
+        Map<Triple<String, String, String>, Integer> echoOwnerSkuBinQtyMap = new HashMap<>();
         operationObject.getDetails().stream()
             .filter(detail -> detail.getReservedFields() != null)
             .forEach(detail -> {
@@ -62,9 +64,10 @@ public class SentrixMobileBinCodeOutboundPlanOrderCreatePlugin implements IOutbo
                 if (reservedFields.containsKey(BIN_CODE) && reservedFields.containsKey(BAR_CODE)) {
                     String binCode = reservedFields.get(BIN_CODE);
                     String barcode = reservedFields.get(BAR_CODE);
-                    barcodeGroupByOwnerCodeMap.computeIfAbsent(detail.getOwnerCode(), v -> new HashSet<>()).add(barcode);
+                    Triple<String, String, String> keyPair = Triple.of(detail.getOwnerCode(), binCode, barcode);
 
-                    Pair<String, String> keyPair = Pair.of(detail.getOwnerCode(), binCode);
+                    barcodeGroupByOwnerCodeMap.put(keyPair, barcode);
+
                     Integer qty = echoOwnerSkuBinQtyMap.getOrDefault(keyPair, 0);
                     echoOwnerSkuBinQtyMap.put(keyPair, qty + detail.getQtyRequired());
                 }
@@ -76,17 +79,18 @@ public class SentrixMobileBinCodeOutboundPlanOrderCreatePlugin implements IOutbo
         }
 
         List<SkuMainDataDTO> skuMainDataDTOS = barcodeGroupByOwnerCodeMap.entrySet().stream()
-            .filter(entry -> CollectionUtils.isNotEmpty(entry.getValue())).map(entry -> {
-                String ownerCode = entry.getKey();
+                .filter(entry -> StringUtils.isNotEmpty(entry.getValue()))
+                .map(entry -> {
+                    String ownerCode = entry.getKey().getLeft();
 
-                SkuMainDataDTO skuMainDataDTO = new SkuMainDataDTO();
-                skuMainDataDTO.setWarehouseCode(operationObject.getWarehouseCode());
-                skuMainDataDTO.setOwnerCode(ownerCode);
-                skuMainDataDTO.setSkuCode(operationObject.getCustomerOrderNo());
-                skuMainDataDTO.setSkuName(operationObject.getCustomerOrderNo());
-                skuMainDataDTO.setSkuBarcode(new BarcodeDTO(entry.getValue().stream().toList()));
-                return skuMainDataDTO;
-            }).toList();
+                    SkuMainDataDTO skuMainDataDTO = new SkuMainDataDTO();
+                    skuMainDataDTO.setWarehouseCode(operationObject.getWarehouseCode());
+                    skuMainDataDTO.setOwnerCode(ownerCode);
+                    skuMainDataDTO.setSkuCode(entry.getValue());
+                    skuMainDataDTO.setSkuName(entry.getValue());
+                    skuMainDataDTO.setSkuBarcode(new BarcodeDTO(List.of(entry.getValue())));
+                    return skuMainDataDTO;
+                }).toList();
 
         skuMainDataApi.createOrUpdateBatch(skuMainDataDTOS);
         log.info("create barcode sku success, create size: {}", skuMainDataDTOS.size());
@@ -94,11 +98,12 @@ public class SentrixMobileBinCodeOutboundPlanOrderCreatePlugin implements IOutbo
 
         echoOwnerSkuBinQtyMap.forEach((key, qty) -> {
             String ownerCode = key.getLeft();
-            String binCode = key.getRight();
-            SkuMainDataDTO skuMainData = skuMainDataApi.getSkuMainData(operationObject.getCustomerOrderNo(), ownerCode);
+            String binCode = key.getMiddle();
+            String barCode = barcodeGroupByOwnerCodeMap.get(key);
+            SkuMainDataDTO skuMainData = skuMainDataApi.getSkuMainData(barCode, ownerCode);
 
             if (skuMainData == null) {
-                log.warn("cannot find sku info, sku code: {}, ownerCode: {}, binCode: {}", operationObject.getCustomerOrderNo(), ownerCode, binCode);
+                log.warn("cannot find sku info, sku code: {}, ownerCode: {}, binCode: {}", barCode, ownerCode, binCode);
                 return;
             }
 
