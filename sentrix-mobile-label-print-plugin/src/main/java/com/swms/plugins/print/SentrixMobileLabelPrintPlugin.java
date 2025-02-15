@@ -110,6 +110,11 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
             return parameter;
         }
 
+        if (StringUtils.isEmpty(parameter)) {
+            log.warn("parameter is empty, for station id: {}", workStationId);
+            return null;
+        }
+
         PutWallSlotDTO putWallSlot = putWallApi.getPutWallSlot(parameter, workStationId);
         // Check slot status and picking order
         if (PutWallSlotStatusEnum.BOUND.equals(putWallSlot.getPutWallSlotStatus())
