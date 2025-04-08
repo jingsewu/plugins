@@ -105,16 +105,20 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
             callbackApi.callback(CallbackApiTypeEnum.CONTAINER_LEAVE, task.getBusinessTaskType().name(), new CallbackMessage<>().setData(containerOperation));
         });
 
-        Optional<ContainerTaskDTO> containerTaskDTOOpt = containerTasks.stream().findAny();
-        containerTaskDTOOpt.ifPresent(containerTaskDTO -> {
-            BusinessTaskTypeEnum businessTaskType = containerTaskDTO.getBusinessTaskType();
-            // 非出库工作站的货架离开，直接返回
-            if (!BusinessTaskTypeEnum.PICKING.equals(businessTaskType)) {
-                return;
-            }
+        try {
+            Optional<ContainerTaskDTO> containerTaskDTOOpt = containerTasks.stream().findAny();
+            containerTaskDTOOpt.ifPresent(containerTaskDTO -> {
+                BusinessTaskTypeEnum businessTaskType = containerTaskDTO.getBusinessTaskType();
+                // 非出库工作站的货架离开，直接返回
+                if (!BusinessTaskTypeEnum.PICKING.equals(businessTaskType)) {
+                    return;
+                }
 
-            resortContainerTasks(containerTasks, containerTaskDTO.getContainerTaskType(), Collections.emptyList());
-        });
+                resortContainerTasks(containerTasks, containerTaskDTO.getContainerTaskType(), Collections.emptyList());
+            });
+        } catch (Exception e) {
+            log.error("resort container tasks failed", e);
+        }
     }
 
     private void resortContainerTasks(List<ContainerTaskDTO> containerTasks, ContainerTaskTypeEnum containerTaskType, List<Long> newCustomerTaskIds) {
@@ -194,7 +198,8 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
         Map<String, Optional<Integer>> containerOrderPriorityMap = allDestinationContainerTasks.stream()
                 .collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.flatMapping(task -> task.getRelations().stream()
-                        .filter(v -> ContainerTaskAndBusinessTaskRelationStatusEnum.NEW == v.getContainerTaskAndBusinessTaskRelationStatus())
+                        .filter(v -> operationTaskDTOMap.containsKey(v.getCustomerTaskId()))
+                        .filter(v -> ContainerTaskAndBusinessTaskRelationStatusEnum.processingStates.contains(v.getContainerTaskAndBusinessTaskRelationStatus()))
                         .map(r -> {
                             int wavePriority = outboundWaveDTOMap.get(pickingOrderDTOMap.get(operationTaskDTOMap.get(r.getCustomerTaskId()).getOrderId()).getWaveNo()).getPriority();
                             Integer taskPriority = operationTaskDTOMap.get(r.getCustomerTaskId()).getPriority();
@@ -434,6 +439,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
         Map<String, Optional<Integer>> containerOrderPriorityMap = allDestinationContainerTasks.stream()
                 .collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.flatMapping(task -> task.getRelations().stream()
+                        .filter(v -> operationTaskDTOMap.containsKey(v.getCustomerTaskId()))
                         .filter(v -> ContainerTaskAndBusinessTaskRelationStatusEnum.processingStates.contains(v.getContainerTaskAndBusinessTaskRelationStatus()))
                         .map(r -> {
                             int wavePriority = outboundWaveDTOMap.get(pickingOrderDTOMap.get(operationTaskDTOMap.get(r.getCustomerTaskId()).getOrderId()).getWaveNo()).getPriority();
