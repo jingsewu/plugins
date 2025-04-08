@@ -429,6 +429,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
         Map<String, Optional<Integer>> containerOrderPriorityMap = allDestinationContainerTasks.stream()
                 .collect(Collectors.groupingBy(ContainerTaskDTO::getContainerCode, Collectors.flatMapping(task -> task.getRelations().stream()
+                        .filter(v -> ContainerTaskAndBusinessTaskRelationStatusEnum.processingStates.contains(v.getContainerTaskAndBusinessTaskRelationStatus()))
                         .map(r -> {
                             int wavePriority = outboundWaveDTOMap.get(pickingOrderDTOMap.get(operationTaskDTOMap.get(r.getCustomerTaskId()).getOrderId()).getWaveNo()).getPriority();
                             Integer taskPriority = operationTaskDTOMap.get(r.getCustomerTaskId()).getPriority();
