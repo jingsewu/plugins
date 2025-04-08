@@ -224,6 +224,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
         List<ContainerTaskDTO> priorityChangedTasks = new ArrayList<>();
         // 按照工作站对所有搬箱任务进行分组，分别重新排序
         allOperationTaskDTOS.stream()
+                .filter(v -> containerTaskDTOMap.containsKey(String.valueOf(v.getWorkStationId())))
                 .collect(Collectors.groupingBy(v -> v.getAssignedStationSlot().keySet().iterator().next()))
                 .forEach((workStationId, operationTaskDTOS) -> {
                     List<ContainerTaskDTO> containerTaskDTOS = containerTaskDTOMap.get(String.valueOf(workStationId));
@@ -465,16 +466,10 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
         List<ContainerTaskDTO> priorityChangedTasks = new ArrayList<>();
         // 按照工作站对所有搬箱任务进行分组，分别重新排序
         allOperationTaskDTOS.stream()
+                .filter(v -> containerTaskDTOMap.containsKey(String.valueOf(v.getWorkStationId())))
                 .collect(Collectors.groupingBy(v -> v.getAssignedStationSlot().keySet().iterator().next()))
                 .forEach((workStationId, operationTaskDTOS) -> {
                     List<ContainerTaskDTO> containerTaskDTOS = containerTaskDTOMap.get(String.valueOf(workStationId));
-
-                    // 所有未完成订单需要的货架
-                    Map<String, Set<Long>> containerCompleteOrders = operationTaskDTOS.stream()
-                            .collect(Collectors.groupingBy(OperationTaskDTO::getSourceContainerCode, Collectors.mapping(OperationTaskDTO::getOrderId, Collectors.toSet())));
-
-                    Map<Long, Set<String>> orderRequiredContainers = operationTaskDTOS.stream()
-                            .collect(Collectors.groupingBy(OperationTaskDTO::getOrderId, Collectors.mapping(OperationTaskDTO::getSourceContainerCode, Collectors.toSet())));
 
                     // 所有未完成货架可以满足的订单行
                     Map<String, Set<Long>> containerCompleteLines = operationTaskDTOS.stream()
