@@ -77,9 +77,14 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
             transferContainerTasks.forEach(task -> callback(task, containerTaskType, newCustomerTaskIds));
         }
 
-        List<ContainerTaskDTO> robotContainerTasks = containerTaskMap.get(ContainerTaskTypeEnum.OUTBOUND);
-        if (!CollectionUtils.isEmpty(robotContainerTasks)) {
-            resortContainerTasks(robotContainerTasks, containerTaskType, newCustomerTaskIds);
+        try {
+            List<ContainerTaskDTO> robotContainerTasks = containerTaskMap.get(ContainerTaskTypeEnum.OUTBOUND);
+            if (!CollectionUtils.isEmpty(robotContainerTasks)) {
+                resortContainerTasks(robotContainerTasks, containerTaskType, newCustomerTaskIds);
+            }
+        } catch (Exception e) {
+            log.error("resort robot container tasks failed", e);
+            containerTasks.forEach(task -> callback(task, containerTaskType, newCustomerTaskIds));
         }
     }
 
