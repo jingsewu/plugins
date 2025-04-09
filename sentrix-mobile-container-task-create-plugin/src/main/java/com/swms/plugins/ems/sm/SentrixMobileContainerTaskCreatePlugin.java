@@ -224,7 +224,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
         List<ContainerTaskDTO> priorityChangedTasks = new ArrayList<>();
         // 按照工作站对所有搬箱任务进行分组，分别重新排序
         allOperationTaskDTOS.stream()
-                .filter(v -> containerTaskDTOMap.containsKey(String.valueOf(v.getWorkStationId())))
+                .filter(v -> containerTaskDTOMap.containsKey(String.valueOf(v.getAssignedStationSlot().keySet().iterator().next())))
                 .collect(Collectors.groupingBy(v -> v.getAssignedStationSlot().keySet().iterator().next()))
                 .forEach((workStationId, operationTaskDTOS) -> {
                     List<ContainerTaskDTO> containerTaskDTOS = containerTaskDTOMap.get(String.valueOf(workStationId));
@@ -466,7 +466,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
         List<ContainerTaskDTO> priorityChangedTasks = new ArrayList<>();
         // 按照工作站对所有搬箱任务进行分组，分别重新排序
         allOperationTaskDTOS.stream()
-                .filter(v -> containerTaskDTOMap.containsKey(String.valueOf(v.getWorkStationId())))
+                .filter(v -> containerTaskDTOMap.containsKey(String.valueOf(v.getAssignedStationSlot().keySet().iterator().next())))
                 .collect(Collectors.groupingBy(v -> v.getAssignedStationSlot().keySet().iterator().next()))
                 .forEach((workStationId, operationTaskDTOS) -> {
                     List<ContainerTaskDTO> containerTaskDTOS = containerTaskDTOMap.get(String.valueOf(workStationId));
