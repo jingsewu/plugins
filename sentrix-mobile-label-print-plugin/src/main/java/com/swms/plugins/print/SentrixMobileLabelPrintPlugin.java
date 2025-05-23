@@ -34,10 +34,12 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.CollectionUtils;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 
 @Slf4j
 @Extension
@@ -224,7 +226,11 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
 
         RestTemplate template = new RestTemplate();
         HttpEntity<String> entity = new HttpEntity<>(JsonUtils.obj2String(requestDTO));
-        template.postForLocation(printURL, entity);
+        try {
+            template.postForLocation(printURL, entity);
+        } catch (ResourceAccessException e) {
+            log.error("Failed to request printer, skipping print. pdf url: {}", pdfUrl);
+        }
     }
 
     /**
