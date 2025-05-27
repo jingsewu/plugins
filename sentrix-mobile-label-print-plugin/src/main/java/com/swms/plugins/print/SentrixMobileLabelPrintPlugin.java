@@ -33,6 +33,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
@@ -225,6 +226,11 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
         }
 
         RestTemplate template = new RestTemplate();
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(1000); // Connection timeout in milliseconds
+        requestFactory.setReadTimeout(5000);    // Read timeout in milliseconds
+        template.setRequestFactory(requestFactory);
+
         HttpEntity<String> entity = new HttpEntity<>(JsonUtils.obj2String(requestDTO));
         try {
             template.postForLocation(printURL, entity);
