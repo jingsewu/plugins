@@ -150,7 +150,9 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
         Set<String> newContainerTaskCodes = containerTasks.stream().map(ContainerTaskDTO::getTaskCode).collect(Collectors.toSet());
         Set<String> destinations = containerTasks.stream().flatMap(task -> task.getDestinations().stream()).collect(Collectors.toSet());
 
-        List<ContainerTaskDTO> allContainerTasks = containerTaskApi.queryContainerTaskListAndExcludeContainerTaskTypes(ContainerTaskStatusEnum.processingStates, List.of(BusinessTaskTypeEnum.PICKING), List.of(ContainerTaskTypeEnum.TRANSFER));
+        List<ContainerTaskDTO> allContainerTasks = containerTaskApi.queryContainerTaskListAndExcludeContainerTaskTypes(ContainerTaskStatusEnum.processingStates, List.of(BusinessTaskTypeEnum.PICKING), List.of(ContainerTaskTypeEnum.TRANSFER)).stream()
+                // 排除 GO_AHEAD 之类的搬箱任务，避免 GO_AHEAD 的转面任务的优先级被更新
+                .filter(v -> v.getContainerTaskType() == ContainerTaskTypeEnum.OUTBOUND).toList();
         if (CollectionUtils.isEmpty(allContainerTasks)) {
             log.info("All container tasks are completed");
             return;
@@ -394,7 +396,9 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
         Set<String> newContainerTaskCodes = containerTasks.stream().map(ContainerTaskDTO::getTaskCode).collect(Collectors.toSet());
         Set<String> destinations = containerTasks.stream().flatMap(task -> task.getDestinations().stream()).collect(Collectors.toSet());
 
-        List<ContainerTaskDTO> allContainerTasks = containerTaskApi.queryContainerTaskListAndExcludeContainerTaskTypes(ContainerTaskStatusEnum.processingStates, List.of(BusinessTaskTypeEnum.PICKING), List.of(ContainerTaskTypeEnum.TRANSFER));
+        List<ContainerTaskDTO> allContainerTasks = containerTaskApi.queryContainerTaskListAndExcludeContainerTaskTypes(ContainerTaskStatusEnum.processingStates, List.of(BusinessTaskTypeEnum.PICKING), List.of(ContainerTaskTypeEnum.TRANSFER)).stream()
+                // 排除 GO_AHEAD 之类的搬箱任务，避免 GO_AHEAD 的转面任务的优先级被更新
+                .filter(v -> v.getContainerTaskType() == ContainerTaskTypeEnum.OUTBOUND).toList();
         if (CollectionUtils.isEmpty(allContainerTasks)) {
             log.info("All container tasks are completed");
             return;
