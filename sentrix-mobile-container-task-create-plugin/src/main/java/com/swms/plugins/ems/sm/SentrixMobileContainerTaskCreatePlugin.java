@@ -78,7 +78,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
         }
 
         try {
-            List<ContainerTaskDTO> robotContainerTasks = containerTaskMap.get(ContainerTaskTypeEnum.OUTBOUND);
+            List<ContainerTaskDTO> robotContainerTasks = containerTaskMap.get(ContainerTaskTypeEnum.PICKING);
             if (!CollectionUtils.isEmpty(robotContainerTasks)) {
                 resortContainerTasks(robotContainerTasks, containerTaskType, newCustomerTaskIds);
             }
@@ -152,7 +152,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
         List<ContainerTaskDTO> allContainerTasks = containerTaskApi.queryContainerTaskListAndExcludeContainerTaskTypes(ContainerTaskStatusEnum.processingStates, List.of(BusinessTaskTypeEnum.PICKING), List.of(ContainerTaskTypeEnum.TRANSFER)).stream()
                 // 排除 GO_AHEAD 之类的搬箱任务，避免 GO_AHEAD 的转面任务的优先级被更新
-                .filter(v -> v.getContainerTaskType() == ContainerTaskTypeEnum.OUTBOUND).toList();
+                .filter(v -> v.getContainerTaskType() == ContainerTaskTypeEnum.PICKING).toList();
         if (CollectionUtils.isEmpty(allContainerTasks)) {
             log.info("All container tasks are completed");
             return;
@@ -398,7 +398,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
         List<ContainerTaskDTO> allContainerTasks = containerTaskApi.queryContainerTaskListAndExcludeContainerTaskTypes(ContainerTaskStatusEnum.processingStates, List.of(BusinessTaskTypeEnum.PICKING), List.of(ContainerTaskTypeEnum.TRANSFER)).stream()
                 // 排除 GO_AHEAD 之类的搬箱任务，避免 GO_AHEAD 的转面任务的优先级被更新
-                .filter(v -> v.getContainerTaskType() == ContainerTaskTypeEnum.OUTBOUND).toList();
+                .filter(v -> v.getContainerTaskType() == ContainerTaskTypeEnum.PICKING).toList();
         if (CollectionUtils.isEmpty(allContainerTasks)) {
             log.info("All container tasks are completed");
             return;
