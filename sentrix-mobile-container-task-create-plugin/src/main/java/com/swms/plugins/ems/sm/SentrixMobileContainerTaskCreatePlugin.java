@@ -33,8 +33,8 @@ import com.swms.wms.api.task.constants.OperationTaskTypeEnum;
 import com.swms.wms.api.task.dto.OperationTaskDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
 import org.pf4j.Extension;
-import org.springframework.util.CollectionUtils;
 import org.springframework.util.StopWatch;
 
 import java.util.*;
@@ -73,13 +73,15 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
         Map<ContainerTaskTypeEnum, List<ContainerTaskDTO>> containerTaskMap = containerTasks.stream()
                 .collect(Collectors.groupingBy(ContainerTaskDTO::getContainerTaskType));
         List<ContainerTaskDTO> transferContainerTasks = containerTaskMap.get(ContainerTaskTypeEnum.TRANSFER);
-        if (!CollectionUtils.isEmpty(transferContainerTasks)) {
+        if (CollectionUtils.isNotEmpty(transferContainerTasks)) {
             transferContainerTasks.forEach(task -> callback(task, containerTaskType, newCustomerTaskIds));
         }
 
         try {
-            List<ContainerTaskDTO> robotContainerTasks = containerTaskMap.get(ContainerTaskTypeEnum.PICKING);
-            if (!CollectionUtils.isEmpty(robotContainerTasks)) {
+            List<ContainerTaskDTO> robotPickingContainerTasks = containerTaskMap.get(ContainerTaskTypeEnum.OUTBOUND);
+            List<ContainerTaskDTO> robotOutboundContainerTasks = containerTaskMap.get(ContainerTaskTypeEnum.PICKING);
+            Collection<ContainerTaskDTO> robotContainerTasks = CollectionUtils.union(robotPickingContainerTasks, robotOutboundContainerTasks);
+            if (CollectionUtils.isNotEmpty(robotPickingContainerTasks)) {
                 resortContainerTasks(robotContainerTasks, containerTaskType, newCustomerTaskIds);
             }
         } catch (Exception e) {
@@ -121,7 +123,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
         }
     }
 
-    private void resortContainerTasks(List<ContainerTaskDTO> containerTasks, ContainerTaskTypeEnum containerTaskType, List<Long> newCustomerTaskIds) {
+    private void resortContainerTasks(Collection<ContainerTaskDTO> containerTasks, ContainerTaskTypeEnum containerTaskType, List<Long> newCustomerTaskIds) {
         List<WorkStationDTO> workStationDTOS = workStationApi.queryAllWorkStation().stream()
                 .filter(v -> WorkStationStatusEnum.ONLINE == v.getWorkStationStatus())
                 .filter(v -> OperationTaskTypeEnum.PICKING == v.getOperationType()).toList();
@@ -144,7 +146,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
         }
     }
 
-    private void resortContainerTasksForBusy(List<ContainerTaskDTO> containerTasks, ContainerTaskTypeEnum containerTaskType, List<Long> newCustomerTaskIds) {
+    private void resortContainerTasksForBusy(Collection<ContainerTaskDTO> containerTasks, ContainerTaskTypeEnum containerTaskType, List<Long> newCustomerTaskIds) {
         StopWatch stopWatch = new StopWatch("sentrix-mobile-container-task-create-plugin-for-busy");
         stopWatch.start("prepare data");
         Set<String> newContainerTaskCodes = containerTasks.stream().map(ContainerTaskDTO::getTaskCode).collect(Collectors.toSet());
@@ -152,7 +154,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
         List<ContainerTaskDTO> allContainerTasks = containerTaskApi.queryContainerTaskListAndExcludeContainerTaskTypes(ContainerTaskStatusEnum.processingStates, List.of(BusinessTaskTypeEnum.PICKING), List.of(ContainerTaskTypeEnum.TRANSFER)).stream()
                 // 排除 GO_AHEAD 之类的搬箱任务，避免 GO_AHEAD 的转面任务的优先级被更新
-                .filter(v -> v.getContainerTaskType() == ContainerTaskTypeEnum.PICKING).toList();
+                .filter(v -> v.getContainerTaskType() == ContainerTaskTypeEnum.PICKING || v.getContainerTaskType() == ContainerTaskTypeEnum.OUTBOUND).toList();
         if (CollectionUtils.isEmpty(allContainerTasks)) {
             log.info("All container tasks are completed");
             return;
@@ -390,7 +392,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
         log.debug("Total cost info: {}", stopWatch.prettyPrint());
     }
 
-    private void resortContainerTasksForIdle(List<ContainerTaskDTO> containerTasks, ContainerTaskTypeEnum containerTaskType, List<Long> newCustomerTaskIds) {
+    private void resortContainerTasksForIdle(Collection<ContainerTaskDTO> containerTasks, ContainerTaskTypeEnum containerTaskType, List<Long> newCustomerTaskIds) {
         StopWatch stopWatch = new StopWatch("sentrix-mobile-container-task-create-plugin");
         stopWatch.start("prepare data");
         Set<String> newContainerTaskCodes = containerTasks.stream().map(ContainerTaskDTO::getTaskCode).collect(Collectors.toSet());
@@ -398,7 +400,7 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
 
         List<ContainerTaskDTO> allContainerTasks = containerTaskApi.queryContainerTaskListAndExcludeContainerTaskTypes(ContainerTaskStatusEnum.processingStates, List.of(BusinessTaskTypeEnum.PICKING), List.of(ContainerTaskTypeEnum.TRANSFER)).stream()
                 // 排除 GO_AHEAD 之类的搬箱任务，避免 GO_AHEAD 的转面任务的优先级被更新
-                .filter(v -> v.getContainerTaskType() == ContainerTaskTypeEnum.PICKING).toList();
+                .filter(v -> v.getContainerTaskType() == ContainerTaskTypeEnum.PICKING || v.getContainerTaskType() == ContainerTaskTypeEnum.OUTBOUND).toList();
         if (CollectionUtils.isEmpty(allContainerTasks)) {
             log.info("All container tasks are completed");
             return;
