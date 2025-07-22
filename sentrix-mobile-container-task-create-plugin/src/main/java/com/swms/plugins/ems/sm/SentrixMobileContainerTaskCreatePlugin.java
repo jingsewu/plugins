@@ -78,8 +78,8 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
         }
 
         try {
-            List<ContainerTaskDTO> robotPickingContainerTasks = containerTaskMap.get(ContainerTaskTypeEnum.OUTBOUND);
-            List<ContainerTaskDTO> robotOutboundContainerTasks = containerTaskMap.get(ContainerTaskTypeEnum.PICKING);
+             List<ContainerTaskDTO> robotPickingContainerTasks = containerTaskMap.getOrDefault(ContainerTaskTypeEnum.OUTBOUND, Collections.emptyList());
+            List<ContainerTaskDTO> robotOutboundContainerTasks = containerTaskMap.getOrDefault(ContainerTaskTypeEnum.PICKING, Collections.emptyList());
             Collection<ContainerTaskDTO> robotContainerTasks = CollectionUtils.union(robotPickingContainerTasks, robotOutboundContainerTasks);
             if (CollectionUtils.isNotEmpty(robotPickingContainerTasks)) {
                 resortContainerTasks(robotContainerTasks, containerTaskType, newCustomerTaskIds);

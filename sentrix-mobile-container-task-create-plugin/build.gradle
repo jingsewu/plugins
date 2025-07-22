@@ -17,6 +17,7 @@ dependencies {
     implementation 'com.swms:plugin-extend'
     implementation 'com.swms:common-utils'
     implementation 'org.apache.commons:commons-lang3'
+    implementation 'org.apache.commons:commons-collections4'
     implementation 'org.pf4j:pf4j-spring'
 
     annotationProcessor 'org.pf4j:pf4j-spring'
