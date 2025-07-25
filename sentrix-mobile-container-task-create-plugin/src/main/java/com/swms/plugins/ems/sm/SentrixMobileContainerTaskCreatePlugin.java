@@ -251,6 +251,8 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                     // 上游未指定优先级的搬箱任务
                     List<ContainerTaskDTO> noPriorityTasks = containerTaskMap.get(Boolean.TRUE);
                     if (!CollectionUtils.isEmpty(noPriorityTasks)) {
+                        // 预排一次
+                        noPriorityTasks.sort(Comparator.comparing(ContainerTaskDTO::getContainerCode));
                         noPriorityTasks.sort((taskA, taskB) -> {
                             String taskAContainerCode = taskA.getContainerCode();
                             String taskBContainerCode = taskB.getContainerCode();
@@ -488,6 +490,8 @@ public class SentrixMobileContainerTaskCreatePlugin implements ContainerTaskCrea
                     // 上游未指定优先级的搬箱任务
                     List<ContainerTaskDTO> noPriorityTasks = containerTaskMap.get(Boolean.TRUE);
                     if (!CollectionUtils.isEmpty(noPriorityTasks)) {
+                        // 预排一次
+                        noPriorityTasks.sort(Comparator.comparing(ContainerTaskDTO::getContainerCode));
                         noPriorityTasks.sort((taskA, taskB) -> {
                             String taskAContainerCode = taskA.getContainerCode();
                             String taskBContainerCode = taskB.getContainerCode();
