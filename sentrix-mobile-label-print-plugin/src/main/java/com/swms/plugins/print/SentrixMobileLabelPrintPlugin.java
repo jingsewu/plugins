@@ -40,7 +40,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Extension
@@ -85,7 +85,7 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
             }
             List<OutboundCustomLabelDTO> customLabelDTOS = JsonUtils.string2List(JsonUtils.obj2String(event.getParameter()), OutboundCustomLabelDTO.class);
             triggerSkuLabelPrint(printConfig, customLabelDTOS);
-        } else {
+        } else if (PrintNodeEnum.PRINT_NODE_SCAN_LOCATION_CODE == event.getPrintNode()) {
             String parameter = String.valueOf(event.getParameter());
             String waveNo = transferToWaveNo(parameter, workStationId);
 
@@ -96,6 +96,22 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
 
             // Retrieve config and trigger print
             triggerPrintLabelByWaveNo(waveNo, event);
+        } else if (PrintNodeEnum.PRINT_NODE_DISPATCH_ORDER == event.getPrintNode()) {
+            List<String> putWallSlotCodes = (List<String>) event.getParameter();
+            Map<String, String> putWallSlotCodeWaveNoMap = transferToWaveNoMap(putWallSlotCodes, workStationId);
+            if (CollectionUtils.isEmpty(putWallSlotCodeWaveNoMap)) {
+                log.warn("Cannot find any wave no, event id: {}", event.getEventId());
+                return;
+            }
+
+            // 开始按照顺序打印
+            putWallSlotCodes.stream()
+                    .filter(putWallSlotCodeWaveNoMap::containsKey)
+                    .forEach(putWallSlotCode -> {
+                        String waveNo = putWallSlotCodeWaveNoMap.get(putWallSlotCode);
+                        // Retrieve config and trigger print
+                        triggerPrintLabelByWaveNo(waveNo, event);
+                    });
         }
     }
 
@@ -137,6 +153,26 @@ public class SentrixMobileLabelPrintPlugin implements PrintPlugin {
         }
 
         return pickingOrderDTO.getWaveNo();
+    }
+
+    private Map<String, String> transferToWaveNoMap(List<String> putWallSlotCodes, Long workStationId) {
+        List<PutWallSlotDTO> putWallSlots = putWallApi.getPutWallSlots(putWallSlotCodes, workStationId);
+        Map<Long, String> putWallSlotCodeAndPickingOrderIdMap = putWallSlots.stream()
+                .filter(v -> PutWallSlotStatusEnum.WAITING_BINDING.equals(v.getPutWallSlotStatus()) && v.getPickingOrderId() != null)
+                .collect(Collectors.toMap(PutWallSlotDTO::getPickingOrderId, PutWallSlotDTO::getPutWallSlotCode));
+        // Check slot status and picking order
+        if (CollectionUtils.isEmpty(putWallSlotCodeAndPickingOrderIdMap)) {
+            return Map.of();
+        }
+
+        List<PickingOrderDTO> pickingOrders = pickingOrderApi.findOrderByPickingOrderIds(putWallSlotCodeAndPickingOrderIdMap.keySet());
+        if (CollectionUtils.isEmpty(pickingOrders)) {
+            return Map.of();
+        }
+
+        return pickingOrders.stream()
+                .filter(v -> !PickingOrderStatusEnum.isFinalStatues(v.getPickingOrderStatus()))
+                .collect(Collectors.toMap(v -> putWallSlotCodeAndPickingOrderIdMap.get(v.getId()), PickingOrderDTO::getWaveNo));
     }
 
     /**
